@@ -1,0 +1,300 @@
+Objective:
+- Download CSVs of Products stored as CSVs or csv.gz files from S3 or Wasabi in different prefixes depending on the product type.
+
+Inputs:
+- Product choice from a Dropdown list.
+- When product is chosen from the Dropdown list, the prefix of the S3 or Wasabi bucket is updated.
+- When it is AWS: We'll need to input the ARN of the MFA device.
+- When it is Wasabi: We'll need to input the Wasabi Access Key and Secret Key.
+- The inputs change dynamically based on the product choice.
+- Start date and End date for the data required in this format: 'YYYY-MM-DD'.
+- For most products we need:
+         - Exchange Code: can take a list of values separated by commas.
+         - Instrument Class: can take a list of values separated by commas. (spot, future, option, perpetual-future, etf)
+         - Instrument Code: can take a list of values separated by commas.
+- For Indices products: 
+            - Index Code: can take a list of values separated by commas.
+
+Outputs:
+- Click on Download button to download the CSVs.
+- If any errors occur, the error message will be shown in a Text box. 
+
+Note:  
+   More Details can be added once the dev started.
+   The code is in Python unless it can be done better in another language. 
+
+Details by product:
+
+S3
+- Order Book Snapshots: 
+    - Prefix Format: s3://bucket-name/order_book_snapshots/{exchange_code}/{instrument_class}/{instrument_code}/{date}/
+    - Example: s3://kaiko-market-data/order_book_snapshots/binc/spot/acabtc/2024-11/order_book_snapshots_binc_spot_acabtc_2024-11-01.csv.gz
+
+- Full Order Book:
+    - Prefix Format: s3://bucket-name/full_order_book/{exchange_code}/{instrument_class}/{instrument_code}/{date}/
+    - Example: s3://kaiko-market-data/full_order_book/binc/spot/adabnb/2024-11/full_order_book_binc_spot_adabnb_2024-11-02.csv.gz
+
+- Top Of Book:
+   - Prefix Format: s3://bucket-name/top_of_book/{exchange_code}/{instrument_class}/{instrument_code}/{date}/
+   - Example: s3://kaiko-market-data/top_of_book/binc/spot/achtry/2024-11/top_of_book_binc_spot_achtry_2024-11-02.csv.gz
+
+Wasabi
+- Trades:
+    - Example: trades-data/tick_csv/v1/gz_v1/Binance V2/ACABTC/2024_11/Binance V2_ACABTC_trades_2024_11_27.csv.gz
+- OHLCV/VWAP/COHLCVVWAP:
+    - Possible granularities: 10m_per_month, 15m_per_month, 1d_per_year, 1h_per_year, 1m_per_month, 30m_per_month, 4h_per_year, 5m_per_month
+    - Example: trades-data/aggro_csv/v1/csv_v1/cohlcvvwap_v1/1d_per_year/bw/aavebnb/bw_aavebnb_cohlcvvwap_1d_2023.csv.gz
+- Derivatives:
+    - Example: derivatives-data/derivatives_csv/v1/full_v1/btmx/adah21/2022_09/btmx_adah21_derivatives_full_2022_09_16.csv.gz
+- Indices:
+    - Example: indices-backfill/index_v1/v1/extensive/blsh-kaiko_pepeusdt/real_time/PT5S/blsh-kaiko_pepeusdt_real_time_vwm_twap_100_2024-11-06.csv.gz
+    OR
+               indices-backfill/index_v1/v1/extensive/d2x-kaiko_etheur_ldn/index_fixing/PT24H/d2x-kaiko_etheur_ldn_index_fixing_vwm_twap_100_2023-06.csv.gz
+
+Suggestions:
+- For Products with granularities like OHLCV/VWAP/COHLCVVWAP, we can add a Dropdown list to choose the granularity.
+- I'd want to add a check for all products except indices to confirm the instrument exists based on this endpoint:
+Instruments
+You can explore all exchanges, assets, and get codes for them using our instrument explorer. Alternatively, if you want to obtain the data in a more programmatic way, use this endpoint.
+
+What is this endpoint for?
+This endpoint retrieves information on either all or specific supported instruments.
+
+Endpoint
+Copy
+https://reference-data-api.kaiko.io/v1/instruments
+Parameters
+Field	Required?	Description
+exchange_code
+
+No
+
+Exchange code. See Exchanges
+
+base_asset
+
+No
+
+The desired base asset code. See Assets
+
+quote_asset
+
+No
+
+The desired quote asset code. See Assets
+
+code
+
+No
+
+Kaiko identifier for the instrument. Always base_asset-quote_asset for spot instruments.
+
+kaiko_legacy_symbol
+
+No
+
+Kaiko legacy instrument symbol.
+
+class
+
+No
+
+spot, future, perpetual-future, option, etc.
+
+base_asset_class
+
+No
+
+Base asset class. 
+
+quote_asset_class
+
+No
+
+Quote asset class. 
+
+trade_start_timestamp
+
+No
+
+Starting time in ISO 8601 (inclusive).
+
+trade_end_timestamp
+
+No
+
+Ending time in ISO 8601 (inclusive). Can also use "ongoing" to get ongoing instruments.
+
+trade_count_min
+
+No
+
+Minimum number of trades.
+
+trade_count_max
+
+No
+
+Maximum number of trades.
+
+with_list_pools
+
+No
+
+true or false. For pairs traded on DEXs, provides the list of underlying pools to each instrument.
+
+continuation_token
+
+No
+
+See Pagination
+
+page_size
+
+No
+
+Maximum number of records to return in one response
+
+orderBy
+
+No
+
+Order results by a specifit field. See below for all possible values.
+
+order
+
+No
+
+Return the data in ascending (1) or descending (-1) order
+
+blockchain
+
+No
+
+Filter on a specific blockchain for on-chain instruments.
+
+You can order your request by:
+exchange_code, class, kaiko_legacy_symbol, trade_start_timestamp, trade_end_timestamp, trade_count, base_asset, quote_asset, code, trade_count_min, trade_count_max
+
+
+Repeated parameters
+All parameters, except for trade_count_min/max, trade_start/end_timestamp can be repeated in the URL to filter. For example to get instruments for coinbase & deribit, the request would be instruments?exchange_code=cbse&exchange_code=drbt
+
+Fields
+Field	Description
+base_asset
+
+Base asset. 
+
+class
+
+spot, future, perpetual-future,...
+
+code
+
+Kaiko identifier for the instrument. Always base_asset-quote_asset for spot instruments.
+
+exchange_code
+
+Exchange code. See Exchanges
+
+exchange_pair_code
+
+Identifier for the instrument used by the exchange.
+
+For perpetual futures pairs, the code may differ from the exchange's and include a _perp suffix (e.g., btcusdt_perp).
+
+kaiko_legacy_exchange_slug
+
+Legacy slug for the exchange. See Exchanges
+
+kaiko_legacy_symbol
+
+Identifier used in past deliveries of historical market data and Data Feed.
+
+quote_asset
+
+Quote asset
+
+trade_start_time
+
+Time of the first available trade in Kaiko's data set.
+
+trade_start_timestamp
+
+Timestamp of the first available trade in Kaiko's data set.
+
+trade_end_time
+
+Time of the last available trade in Kaiko's data set. null if instrument is still active
+
+trade_end_timestamp
+
+Timestamp of the last available trade in Kaiko's data set. null if instrument is still active
+
+trade_count
+
+The total number of trades available through Kaiko Rest API and Kaiko Stream. For active pairs, this is an approximation.
+
+trade_compressed_size
+
+Approximate size in bytes of all available trades in Kaiko Stream.
+
+list_pools
+
+The list of the underlying pools to each instrument. (Only when arg with_list_pools=true is provided).
+
+Some exchanges may refer to "base" and "quote" currencies differently.
+
+When we report the "price" of a trade, we're referring to the "base_asset" price as reported by the exchange.
+
+When we report the "volume" involved in a trade, we're referring to volume od the "base_asset" as reported by the exchange.
+
+Note: some exchanges reverse the ordering of base/quote in their pair codes. 
+
+Request example
+cURL
+Copy
+curl --compressed -H 'Accept: application/json' 'https://reference-data-api.kaiko.io/v1/instruments'
+Response example
+JSON
+Copy
+{
+  "result": "success",
+  "data": [
+    {
+      "kaiko_legacy_exchange_slug": "bf",
+      "trade_start_time": "2017-08-09T23:36:33.0000000Z",
+      "trade_end_time": null,
+      "code": "xmr-btc",
+      "exchange_code": "bfnx",
+      "exchange_pair_code": "XMRBTC",
+      "base_asset": "xmr",
+      "quote_asset": "btc",
+      "kaiko_legacy_symbol": "xmrbtc",
+      "class": "spot",
+      "trade_start_timestamp": 1502321793000,
+      "trade_end_timestamp": null,
+      "trade_count": 2439870,
+      "trade_compressed_size": 35037071
+    },
+    {
+      "kaiko_legacy_exchange_slug": "kk",
+      "trade_start_time": "2017-08-08T20:10:04.0000000Z",
+      "trade_end_time": null,
+      "code": "gno-eth",
+      "exchange_code": "krkn",
+      "exchange_pair_code": "GNOETH",
+      "base_asset": "gno",
+      "quote_asset": "eth",
+      "kaiko_legacy_symbol": "gnoeth",
+      "class": "spot",
+      "trade_start_timestamp": 1502223004345,
+      "trade_end_timestamp": null,
+      "trade_count": 380822,
+      "trade_compressed_size": 21119034
+    },
+    /* ... */
+  ]
+}
+- You had probably noticed in the paths examples above that the instruments and exchange depending on the products use different codes, sometimes exchange_code other times slugs. Maybe we need some linking between them and use them in the inputs. 
