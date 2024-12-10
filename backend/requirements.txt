@@ -1,0 +1,6 @@
+fastapi==0.95.2       # Web framework for building APIs
+uvicorn==0.23.0       # ASGI server for running FastAPI
+boto3==1.28.67        # AWS SDK for Python to interact with S3/Wasabi
+python-multipart==0.0.6  # For handling file uploads
+requests==2.31.0      # For making HTTP requests to the Kaiko API
+pydantic==1.10.9      # Data validation and settings management
