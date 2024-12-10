@@ -1,58 +1,129 @@
 import boto3
+import requests
+import gzip
+import shutil
+from itertools import product
+from datetime import timedelta, datetime
+from zipfile import ZipFile
 import os
-from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
 
-# Generate file paths dynamically
-def generate_file_paths(prefix_template, date_range, exchange_code, instrument_class, instrument_code):
-    file_paths = []
-    start_date, end_date = map(lambda d: datetime.strptime(d, "%Y-%m-%d"), date_range)
 
-    while start_date <= end_date:
-        date_str = start_date.strftime("%Y-%m-%d")
-        for code in instrument_code:
-            file_path = prefix_template.format(
-                exchange_code=exchange_code,
-                instrument_class=instrument_class,
-                instrument_code=code,
-                date=date_str
-            )
-            file_paths.append(file_path)
-        start_date += timedelta(days=1)
+async def fetch_files(valid_combinations, start_date, end_date, storage, download_folder):
+    """
+    Download files from S3 or Wasabi for the given valid combinations and date range.
+    """
+    session = boto3.Session()
 
-    return file_paths
+    if storage == "s3":
+        s3_client = session.client("s3")
+        bucket_name = "kaiko-market-data"  # Example S3 bucket
+    elif storage == "wasabi":
+        s3_client = session.client(
+            "s3",
+            aws_access_key_id="YOUR_WASABI_ACCESS_KEY",
+            aws_secret_access_key="YOUR_WASABI_SECRET_KEY",
+            endpoint_url="https://s3.us-east-2.wasabisys.com"
+        )
+        bucket_name = "your-wasabi-bucket"  # Example Wasabi bucket
+    else:
+        raise ValueError("Unsupported storage type.")
+    
+    # Prepare ZIP file for downloads
+    zip_path = os.path.join(download_folder, "downloaded_data.zip")
+    with ZipFile(zip_path, "w") as zip_file:
+        current_date = start_date
+        while current_date <= end_date:
+            date_str = current_date.strftime("%Y-%m-%d")
+            
+            for exchange, cls, code in valid_combinations:
+                prefix = f"{cls}/{exchange}/{code}/{date_str}/"
+                response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
+                
+                if "Contents" in response:
+                    for obj in response["Contents"]:
+                        file_key = obj["Key"]
+                        local_file_path = os.path.join(download_folder, os.path.basename(file_key))
+                        
+                        # Download file
+                        s3_client.download_file(bucket_name, file_key, local_file_path)
+                        
+                        # Unzip if necessary
+                        if local_file_path.endswith(".gz"):
+                            csv_path = local_file_path[:-3]
+                            with gzip.open(local_file_path, "rb") as gz_in:
+                                with open(csv_path, "wb") as csv_out:
+                                    shutil.copyfileobj(gz_in, csv_out)
+                            os.remove(local_file_path)
+                            local_file_path = csv_path
+                        
+                        # Add to ZIP
+                        zip_file.write(local_file_path, arcname=os.path.basename(local_file_path))
+                        os.remove(local_file_path)
+            
+            current_date += timedelta(days=1)
+    
+    return zip_path
 
-# Download files concurrently
-def download_files(request, background_tasks):
-    # Initialize S3/Wasabi client
-    s3_client = boto3.client(
-        "s3" if request.storage_type == "s3" else "wasabi",
-        aws_access_key_id=request.credentials["key"],
-        aws_secret_access_key=request.credentials["secret"],
-        endpoint_url=request.credentials.get("endpoint_url")
-    )
 
-    # Generate file paths
-    file_paths = generate_file_paths(
-        request.prefix_template,
-        request.date_range,
-        request.exchange_code,
-        request.instrument_class,
-        request.instrument_code
-    )
+def generate_prefixes(
+    product: str,
+    exchange_code: list,
+    instrument_class: list = None,
+    instrument_code: list = None,
+    index_code: list = None,
+    granularity: str = None,
+    start_date: datetime = None,
+    end_date: datetime = None,
+):
+    """
+    Generate prefixes dynamically based on the product and input parameters.
+    """
+    prefixes = []
+    date_range = [
+        (start_date + timedelta(days=i)).strftime("%Y-%m-%d")
+        for i in range((end_date - start_date).days + 1)
+    ]
 
-    # Download each file
-    output_dir = "./downloads/"
-    os.makedirs(output_dir, exist_ok=True)
+    if product in ["Order Book Snapshots", "Full Order Book", "Top Of Book"]:
+        for date in date_range:
+            for exch in exchange_code:
+                for instr_class in instrument_class:
+                    for instr_code in instrument_code:
+                        prefixes.append(
+                            f"s3://bucket-name/{product.lower().replace(' ', '_')}/{exch}/{instr_class}/{instr_code}/{date}/"
+                        )
+    elif product == "Trades":
+        for date in date_range:
+            for exch in exchange_code:
+                for instr_code in instrument_code:
+                    prefixes.append(
+                        f"trades-data/tick_csv/v1/gz_v1/{exch}/{instr_code}/{date.replace('-', '_')}/"
+                    )
+    elif product == "OHLCV/VWAP/COHLCVVWAP":
+        if not granularity:
+            raise ValueError("Granularity must be specified for this product.")
+        for date in date_range:
+            for exch in exchange_code:
+                for instr_code in instrument_code:
+                    prefixes.append(
+                        f"trades-data/aggro_csv/v1/csv_v1/cohlcvvwap_v1/{granularity}/{exch}/{instr_code}/{date[:7]}/"
+                    )
+    elif product == "Indices":
+        for date in date_range:
+            for index in index_code:
+                prefixes.append(
+                    f"indices-backfill/index_v1/v1/extensive/{index}/{date[:7]}/"
+                )
+    return prefixes
 
-    def download_file(file_path):
-        local_path = os.path.join(output_dir, os.path.basename(file_path))
-        s3_client.download_file(request.bucket_name, file_path, local_path)
 
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        executor.map(download_file, file_paths)
-
-    # Optionally zip the files
-    # background_tasks.add_task(zip_files, output_dir)
-
-    return "task-id-placeholder"
+def compress_files(files, output_folder):
+    """
+    Compress files into a ZIP archive.
+    """
+    os.makedirs(output_folder, exist_ok=True)
+    zip_path = os.path.join(output_folder, "downloaded_files.zip")
+    with ZipFile(zip_path, "w") as zipf:
+        for file in files:
+            zipf.write(file, arcname=os.path.basename(file))
+    return zip_path
