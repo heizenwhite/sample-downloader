@@ -3,7 +3,8 @@ from fastapi.responses import FileResponse, JSONResponse
 from itertools import product as cartesian_product
 from datetime import datetime
 import os
-from app.services.s3_handler import fetch_files, generate_prefixes
+from app.services.s3_handler import fetch_files
+from app.utils.prefix_generator import generate_prefixes
 
 router = APIRouter()
 
@@ -18,10 +19,8 @@ async def download_data(
     start_date: str = None,
     end_date: str = None,
     storage: str = "s3",
-    access_key: str = None,         # Not needed if keys are in backend env
-    secret_key: str = None,         # Not needed if keys are in backend env
-    mfa_arn: str = None,            # Needed for S3
-    mfa_code: str = None            # Needed for S3
+    mfa_arn: str = None,
+    mfa_code: str = None
 ):
     try:
         # Debug input parameters
@@ -36,7 +35,7 @@ async def download_data(
         if end_date_obj < start_date_obj:
             return JSONResponse({"detail": "End date must be after start date."}, status_code=400)
 
-        # Generate prefixes for files to download
+        # Generate all S3/Wasabi prefixes to fetch
         prefixes = generate_prefixes(
             product=product,
             exchange_code=exchange_code.split(",") if exchange_code else [],
@@ -52,7 +51,7 @@ async def download_data(
         download_folder = "./downloads/"
         os.makedirs(download_folder, exist_ok=True)
 
-        # Download files from S3 or Wasabi using prefixes
+        # Fetch and compress files
         zip_path = await fetch_files(
             prefixes=prefixes,
             storage=storage,
