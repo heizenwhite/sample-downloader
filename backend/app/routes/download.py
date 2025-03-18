@@ -1,16 +1,16 @@
 from fastapi import APIRouter, Query, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
-from typing import List
+from itertools import product as cartesian_product
 from datetime import datetime
 import os
-from app.services.s3_handler import fetch_files, compress_files, generate_prefixes
+from app.services.s3_handler import fetch_files, generate_prefixes
 
 router = APIRouter()
 
 @router.post("/download/")
 async def download_data(
     product: str,
-    exchange_code: str,
+    exchange_code: str = None,
     instrument_class: str = None,
     instrument_code: str = None,
     index_code: str = None,
@@ -18,8 +18,10 @@ async def download_data(
     start_date: str = None,
     end_date: str = None,
     storage: str = "s3",
-    access_key: str = None,
-    secret_key: str = None
+    access_key: str = None,         # Not needed if keys are in backend env
+    secret_key: str = None,         # Not needed if keys are in backend env
+    mfa_arn: str = None,            # Needed for S3
+    mfa_code: str = None            # Needed for S3
 ):
     try:
         # Debug input parameters
@@ -28,42 +30,35 @@ async def download_data(
               f"start_date={start_date}, end_date={end_date}, storage={storage}")
 
         # Validate and parse dates
-        from datetime import datetime
         start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
         end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
 
         if end_date_obj < start_date_obj:
-            return JSONResponse(
-                {"detail": "End date must be after start date."}, status_code=400
-            )
+            return JSONResponse({"detail": "End date must be after start date."}, status_code=400)
 
-        # Ensure valid combinations are generated
-        combinations = list(product(exchange_code.split(","), instrument_class.split(","), instrument_code.split(",")))
-
-        # Generate prefixes
+        # Generate prefixes for files to download
         prefixes = generate_prefixes(
             product=product,
-            exchange_code=exchange_code.split(","),
-            instrument_class=instrument_class.split(","),
-            instrument_code=instrument_code.split(","),
-            index_code=index_code.split(",") if index_code else None,
+            exchange_code=exchange_code.split(",") if exchange_code else [],
+            instrument_class=instrument_class.split(",") if instrument_class else [],
+            instrument_code=instrument_code.split(",") if instrument_code else [],
+            index_code=index_code.split(",") if index_code else [],
             granularity=granularity,
             start_date=start_date_obj,
             end_date=end_date_obj,
         )
 
-        # Download files
+        # Download folder
         download_folder = "./downloads/"
         os.makedirs(download_folder, exist_ok=True)
 
+        # Download files from S3 or Wasabi using prefixes
         zip_path = await fetch_files(
-            valid_combinations=combinations,
-            start_date=start_date_obj,
-            end_date=end_date_obj,
+            prefixes=prefixes,
             storage=storage,
             download_folder=download_folder,
-            access_key=access_key,
-            secret_key=secret_key,
+            mfa_arn=mfa_arn,
+            mfa_code=mfa_code
         )
 
         return FileResponse(

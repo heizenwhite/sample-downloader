@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query
 from typing import List
-from itertools import product
+from itertools import product as cartesian_product
 from app.services.kaiko_api import validate_combinations
 
 router = APIRouter()
@@ -18,7 +18,7 @@ async def validate(
         instruments = instrument_code.split(",")
         
         # Generate all combinations
-        combinations = list(product(exchanges, classes, instruments))
+        combinations = list(cartesian_product(exchanges, classes, instruments))
         
         # Validate each combination
         result = await validate_combinations(combinations)
