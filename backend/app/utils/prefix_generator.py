@@ -72,14 +72,18 @@ def generate_prefixes(
         if not granularity:
             raise ValueError("Granularity must be specified for this product.")
         for date in date_range:
-            year_folder = date[:4] if granularity in ["1d_per_year", "4h_per_year", "1h_per_year"] else date[:7]
+            year_folder = date[:4] if granularity in ["1d", "4h", "1h"] else date[:7]
             for exch in exchange_code:
                 for instr_class in instrument_class:
                     for instr_code in instrument_code:
                         prefixes.append(
-                            f"{product.lower()}/{granularity}/{exch}/{instr_class}/{instr_code}/{year_folder}/{product.lower().replace(' ', '_')}_{exch}_{instr_class}_{instr_code}_{date}.csv.gz"
+                            f"{product.lower()}/{granularity}/{exch}/{instr_class}/{instr_code}/{year_folder}/{product.lower().replace(' ', '_')}_{exch}_{instr_class}_{instr_code}_{year_folder}.csv.gz"
                         )
     else:
         raise ValueError(f"Unsupported product type: {product}")
+    
+    print("Generated Prefixes:")
+    for prefix in prefixes:
+        print(f" - {prefix}")
 
     return prefixes
