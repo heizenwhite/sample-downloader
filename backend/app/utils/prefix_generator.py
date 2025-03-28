@@ -38,7 +38,7 @@ def generate_prefixes(
     ]
 
     # For Index and Index Multi-Asset (Wasabi bucket)
-    if product in ["Index", "Index Multi-Asset"]:
+    if product in ["Index", "Index Multi-Assets"]:
         for date in date_range:
             for index in index_code:
                 pt = "PT5S"
@@ -51,10 +51,12 @@ def generate_prefixes(
 
                 index_type = "index_fixing" if any(x in index.upper() for x in ["LDN", "NYC", "SGP"]) else "real_time"
                 date_part = date[:7] if pt in ["PT24H", "PT1H"] else date
+                parent_folder = product.lower().replace(" ", "_").replace("-", "_") + "_v1"
 
                 prefixes.append(
-                    f"indices-backfill/index_v1/v1/extensive/{index.lower()}/{index_type}/{pt}/{index.lower()}_{index_type}_vwm_twap_100_{date_part}.csv.gz"
+                    f"{parent_folder}/v1/extensive/{index.lower()}/{index_type}/{pt}/{index.lower()}_{index_type}{'' if 'multi' in parent_folder else '_vwm_twap_100'}_{date_part}.csv.gz"
                 )
+
 
     # For S3-based products like Trades, Order Book Snapshots, etc.
     elif product in ["Order Book Snapshots", "Full Order Book", "Top Of Book", "Trades", "Derivatives"]:
@@ -85,5 +87,7 @@ def generate_prefixes(
     print("Generated Prefixes:")
     for prefix in prefixes:
         print(f" - {prefix}")
+
+    prefixes = list(set(prefixes))  # Add this before returning
 
     return prefixes

@@ -6,7 +6,7 @@ import shutil
 import os
 from app.utils.auth import get_s3_client, get_wasabi_client
 from app.utils.compress import compress_files
-from app.routes.cancel import cancellation_registry
+from app.utils.cancellation_registry import cancellation_registry  # ✅ correct import
 
 class DownloadCancelled(Exception):
     pass
@@ -15,9 +15,8 @@ async def fetch_files(
     prefixes,
     storage,
     download_folder,
-    mfa_arn=None,
-    mfa_code=None,
-    request_id=None,
+    request_id=None,  # ✅ MFA removed, only request_id remains
+    bucket_type="indices-backfill",  # ✅ MFA removed, only bucket_type remains
 ):
     """
     Download files from S3 or Wasabi for the given prefixes.
@@ -26,11 +25,20 @@ async def fetch_files(
 
     # Select S3 or Wasabi client
     if storage == "s3":
-        s3_client = get_s3_client(mfa_arn, mfa_code)
-        bucket_name = "kaiko-market-data"
+        # S3 will always use the kaiko-market-data bucket
+        s3_client = get_s3_client()
+        bucket_name = "kaiko-market-data"  # Fixed bucket name for S3
+
     elif storage == "wasabi":
         s3_client = get_wasabi_client()
-        bucket_name = "indices-backfill"
+
+        # Select bucket based on bucket_type for Wasabi
+        if bucket_type == "indices-backfill":
+            bucket_name = "indices-backfill"  # Wasabi bucket for backfill data
+        elif bucket_type == "indices-data":
+            bucket_name = "indices-data"  # Wasabi bucket for indices data
+        else:
+            raise ValueError(f"Unsupported bucket type for Wasabi: {bucket_type}")
     else:
         raise ValueError("Unsupported storage type")
 
@@ -42,6 +50,7 @@ async def fetch_files(
                 print(f"❌ Cancelled before processing prefix: {prefix}")
                 raise DownloadCancelled(f"Request {request_id} was cancelled")
 
+            # Fetch the list of objects for the given prefix
             response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
             if "Contents" in response:
                 for obj in response["Contents"]:
@@ -71,18 +80,25 @@ async def fetch_files(
 
                     downloaded_files.append(local_file_path)
 
-        # Check before zipping
+            else:
+                print(f"❌ No files found for prefix: {prefix}")
+
+        # Final check before compressing
         if request_id and cancellation_registry.get(request_id):
-            print(f"❌ Cancelled before zipping files")
+            print("❌ Cancelled before zipping files")
             raise DownloadCancelled(f"Request {request_id} was cancelled")
 
         zip_path = os.path.join(download_folder, "downloaded_data.zip")
-        compress_files(downloaded_files, zip_path)
+        if downloaded_files:
+            compress_files(downloaded_files, zip_path)
+            print(f"✅ Files compressed into {zip_path}")
+        else:
+            print("❌ No files downloaded to compress.")
 
-        return zip_path
+        return zip_path, downloaded_files
 
     finally:
-        # Cleanup partial files if cancelled
+        # Clean up partially downloaded files if cancelled
         if request_id and cancellation_registry.get(request_id):
             print("🧹 Cleaning up partial downloads due to cancellation...")
             for f in downloaded_files:
@@ -92,5 +108,4 @@ async def fetch_files(
                 try:
                     os.rmdir(download_folder)
                 except:
-                    pass  # Folder may not be empty if others running
-
+                    pass
