@@ -1,3 +1,5 @@
+# services/s3_handler.py
+
 import boto3
 import gzip
 import shutil
@@ -17,8 +19,12 @@ async def fetch_files(
     mfa_code=None,
     request_id=None,
 ):
+    """
+    Download files from S3 or Wasabi for the given prefixes.
+    """
     os.makedirs(download_folder, exist_ok=True)
 
+    # Select S3 or Wasabi client
     if storage == "s3":
         s3_client = get_s3_client(mfa_arn, mfa_code)
         bucket_name = "kaiko-market-data"
@@ -33,31 +39,28 @@ async def fetch_files(
     try:
         for prefix in prefixes:
             if request_id and cancellation_registry.get(request_id):
-                print(f"❌ Cancelled before prefix: {prefix}")
-                raise DownloadCancelled()
+                print(f"❌ Cancelled before processing prefix: {prefix}")
+                raise DownloadCancelled(f"Request {request_id} was cancelled")
 
             response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
             if "Contents" in response:
                 for obj in response["Contents"]:
                     if request_id and cancellation_registry.get(request_id):
-                        print(f"❌ Cancelled before file: {obj['Key']}")
-                        raise DownloadCancelled()
+                        print(f"❌ Cancelled while processing file: {obj['Key']}")
+                        raise DownloadCancelled(f"Request {request_id} was cancelled")
 
                     file_key = obj["Key"]
                     local_file_path = os.path.join(download_folder, os.path.basename(file_key))
 
-                    print(f"⬇️ Streaming download {file_key}...")
+                    print(f"⬇️ Downloading {file_key}...")
 
-                    # CHUNKED STREAMING
-                    with open(local_file_path, "wb") as f:
-                        s3_obj = s3_client.get_object(Bucket=bucket_name, Key=file_key)
-                        for chunk in s3_obj['Body'].iter_chunks(chunk_size=5 * 1024 * 1024):  # 5MB chunks
-                            if request_id and cancellation_registry.get(request_id):
-                                print(f"❌ Cancelled mid-download: {file_key}")
-                                raise DownloadCancelled()
-                            f.write(chunk)
+                    s3_client.download_file(bucket_name, file_key, local_file_path)
 
-                    # Decompression logic
+                    if request_id and cancellation_registry.get(request_id):
+                        print(f"❌ Cancelled after downloading {file_key}")
+                        raise DownloadCancelled(f"Request {request_id} was cancelled")
+
+                    # Decompress if .gz
                     if local_file_path.endswith(".gz"):
                         decompressed_path = local_file_path[:-3]
                         with gzip.open(local_file_path, "rb") as f_in:
@@ -68,9 +71,10 @@ async def fetch_files(
 
                     downloaded_files.append(local_file_path)
 
+        # Check before zipping
         if request_id and cancellation_registry.get(request_id):
-            print("❌ Cancelled before zipping")
-            raise DownloadCancelled()
+            print(f"❌ Cancelled before zipping files")
+            raise DownloadCancelled(f"Request {request_id} was cancelled")
 
         zip_path = os.path.join(download_folder, "downloaded_data.zip")
         compress_files(downloaded_files, zip_path)
@@ -78,8 +82,15 @@ async def fetch_files(
         return zip_path
 
     finally:
+        # Cleanup partial files if cancelled
         if request_id and cancellation_registry.get(request_id):
-            print("🧹 Cleaning up due to cancellation...")
+            print("🧹 Cleaning up partial downloads due to cancellation...")
             for f in downloaded_files:
                 if os.path.exists(f):
                     os.remove(f)
+            if os.path.exists(download_folder):
+                try:
+                    os.rmdir(download_folder)
+                except:
+                    pass  # Folder may not be empty if others running
+
