@@ -1,78 +1,119 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { v4 as uuidv4 } from "uuid";
 import InputField from "./InputField";
 import SelectInput from "./SelectInput";
 import Spinner from "./Spinner";
-import Select from "react-select";
+import dynamic from "next/dynamic";
+import debounce from "lodash.debounce";
+
+// Lazy load the virtualized multiselect component
+const MultiSelect = dynamic(() => import("./VirtualizedMultiSelect"), { ssr: false });
+
+const KAIKO_INSTRUMENTS_API = "https://reference-data-api.kaiko.io/v1/instruments";
 
 export default function DownloadForm() {
   const [product, setProduct] = useState("Trades");
   const [exchangeCode, setExchangeCode] = useState("");
   const [instrumentClass, setInstrumentClass] = useState<string[]>([]);
   const [instrumentCode, setInstrumentCode] = useState<string[]>([]);
+  const [rawInstruments, setRawInstruments] = useState<any[]>([]);
   const [indexCode, setIndexCode] = useState("");
   const [granularity, setGranularity] = useState("1m");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState<{
+    inputs?: Record<string, string>;
+    prefixes?: string[];
+    log?: string[];
+    error?: string;
+  } | null>(null);
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [requestId, setRequestId] = useState<string | null>(null);
   const [bucketType, setBucketType] = useState("indices-backfill");
 
   const [availableClasses, setAvailableClasses] = useState<string[]>([]);
-  const [availableInstrumentCodes, setAvailableInstrumentCodes] = useState<string[]>([]);
+  const [availableCodes, setAvailableCodes] = useState<string[]>([]);
 
   const requiresGranularity = ["OHLCV", "VWAP", "COHLCVVWAP"].includes(product);
   const isIndexProduct = ["Index", "Index Multi-Assets"].includes(product);
   const storage = isIndexProduct ? "wasabi" : "s3";
 
-  useEffect(() => {
-    const fetchInstruments = async () => {
-      if (!exchangeCode) return;
-  
-      const exchangeCodes = exchangeCode.split(",").map(e => e.trim()).filter(Boolean);
-      if (exchangeCodes.length === 0) return;
-  
-      try {
-        let allClasses = new Set<string>();
-        let allSymbols = new Set<string>();
-  
-        for (const code of exchangeCodes) {
-          const url = `https://reference-data-api.kaiko.io/v1/instruments?exchange_code=${code}&page_size=10000`;
-          const res = await fetch(url);
-          const json = await res.json();
-  
-          if (json?.data?.length) {
-            for (const item of json.data) {
-              if (item.kaiko_legacy_symbol) allSymbols.add(item.kaiko_legacy_symbol);
-              if (item.class) allClasses.add(item.class);
+  const debouncedFetchInstruments = debounce(async (
+    exchange: string,
+    isIndexProduct: boolean,
+    setRawInstruments: Function,
+    setAvailableClasses: Function
+  ) => {
+    if (!exchange || isIndexProduct) return;
+
+    const exchanges = exchange.split(",").map((e) => e.trim());
+    const allInstruments: any[] = [];
+    const uniqueClasses = new Set<string>();
+
+    try {
+      for (const ex of exchanges) {
+        let token: string | null = null;
+
+        do {
+          const params = new URLSearchParams({
+            exchange_code: ex,
+            ...(token ? { continuation_token: token } : {}),
+            page_size: "500",
+          });
+
+          const res = await fetch(`${KAIKO_INSTRUMENTS_API}?${params}`);
+          const data = await res.json();
+
+          if (Array.isArray(data.data)) {
+            for (const item of data.data) {
+              allInstruments.push(item);
+              if (item.class) uniqueClasses.add(item.class);
             }
           }
-        }
-  
-        setAvailableClasses(Array.from(allClasses).sort());
-        setAvailableInstrumentCodes(Array.from(allSymbols).sort());
-      } catch (err) {
-        console.error("Instrument fetch failed:", err);
-        setAvailableClasses([]);
-        setAvailableInstrumentCodes([]);
+
+          token = data.continuation_token || null;
+        } while (token);
       }
-    };
-  
-    // Debounce the fetch (wait 500ms after typing stops)
-    const timeout = setTimeout(fetchInstruments, 500);
-    return () => clearTimeout(timeout);
-  }, [exchangeCode]);
-  
+
+      setRawInstruments(allInstruments);
+      setAvailableClasses(Array.from(uniqueClasses).sort());
+    } catch (err) {
+      console.error("Instrument fetch failed:", err);
+    }
+  }, 500);
+
+  useEffect(() => {
+    if (!isIndexProduct && exchangeCode) {
+      debouncedFetchInstruments(exchangeCode, isIndexProduct, setRawInstruments, setAvailableClasses);
+    } else {
+      setRawInstruments([]);
+      setAvailableClasses([]);
+      setAvailableCodes([]);
+    }
+  }, [exchangeCode, isIndexProduct]);
+
+  useEffect(() => {
+    if (!isIndexProduct && rawInstruments.length > 0) {
+      const filtered = rawInstruments.filter((item) =>
+        instrumentClass.length === 0 || instrumentClass.includes(item.class)
+      );
+
+      const symbols = Array.from(
+        new Set(filtered.map((item) => item.kaiko_legacy_symbol).filter(Boolean))
+      ).sort();
+
+      setAvailableCodes(symbols);
+    }
+  }, [instrumentClass, rawInstruments, isIndexProduct]);
 
   const handleDownload = async () => {
     const id = uuidv4();
     setRequestId(id);
     setLoading(true);
-    setStatus("");
+    setStatus(null);
     const controller = new AbortController();
     setAbortController(controller);
 
@@ -99,21 +140,25 @@ export default function DownloadForm() {
         signal: controller.signal,
       });
 
-      if (!res.ok) {
-        const text = await res.text();
-        setStatus(`❌ Error: ${text}`);
-        return;
+      const isJson = res.headers.get("Content-Type")?.includes("application/json");
+      if (isJson) {
+        const result = await res.json();
+        setStatus(result);
+      } else {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "sample_data.zip";
+        a.click();
+        setStatus({ log: ["✅ Download started!"], inputs: params });
       }
-
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "sample_data.zip";
-      a.click();
-      setStatus("✅ Download started!");
     } catch (err: any) {
-      setStatus(err.name === "AbortError" ? "⚠️ Download cancelled!" : `❌ ${err.message}`);
+      if (err.name === "AbortError") {
+        setStatus({ log: ["⚠️ Download cancelled!"] });
+      } else {
+        setStatus({ error: `❌ ${err.message}` });
+      }
     } finally {
       setLoading(false);
       setAbortController(null);
@@ -126,41 +171,42 @@ export default function DownloadForm() {
     if (requestId) {
       const backendUrl = process.env.NEXT_PUBLIC_API_BASE!;
       await fetch(`${backendUrl}/api/cancel/?request_id=${requestId}`, { method: "POST" });
-      setStatus("⚠️ Download cancelled (backend)!");
+      setStatus({ log: ["⚠️ Download cancelled (backend)!"] });
     }
     setLoading(false);
   };
 
   return (
     <div className="space-y-4">
-      <SelectInput label="Product" value={product} setValue={setProduct} options={[
-        "Trades", "Order Book Snapshots", "Full Order Book", "Top Of Book", 
-        "OHLCV", "VWAP", "COHLCVVWAP", "Derivatives", "Index", "Index Multi-Assets"
-      ]} />
+      <SelectInput
+        label="Product"
+        value={product}
+        setValue={setProduct}
+        options={[
+          "Trades", "Order Book Snapshots", "Full Order Book", "Top Of Book",
+          "OHLCV", "VWAP", "COHLCVVWAP", "Derivatives", "Index", "Index Multi-Assets"
+        ]}
+      />
 
       {!isIndexProduct && (
         <>
           <InputField label="Exchange Code(s)" value={exchangeCode} setValue={setExchangeCode} />
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Instrument Class(es)</label>
-            <Select
-              isMulti
-              options={availableClasses.map((c) => ({ label: c, value: c }))}
-              value={instrumentClass.map((v) => ({ label: v, value: v }))}
-              onChange={(selected) => setInstrumentClass(selected.map((s) => s.value))}
-            />
-          </div>
+          <MultiSelect
+            label="Instrument Class(es)"
+            options={availableClasses}
+            selected={instrumentClass}
+            onChange={setInstrumentClass}
+            placeholder="Select class(es)..."
+          />
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Instrument Code(s)</label>
-            <Select
-              isMulti
-              options={availableInstrumentCodes.map((c) => ({ label: c, value: c }))}
-              value={instrumentCode.map((v) => ({ label: v, value: v }))}
-              onChange={(selected) => setInstrumentCode(selected.map((s) => s.value))}
-            />
-          </div>
+          <MultiSelect
+            label="Instrument Code(s)"
+            options={availableCodes}
+            selected={instrumentCode}
+            onChange={setInstrumentCode}
+            placeholder="Select code(s)..."
+          />
         </>
       )}
 
@@ -169,18 +215,18 @@ export default function DownloadForm() {
           <InputField label="Index Code(s)" value={indexCode} setValue={setIndexCode} />
           <div className="space-y-2">
             <label className="block text-sm font-medium text-gray-700">Select Bucket</label>
-            <div className="flex items-center space-x-4">
-              {["indices-backfill", "indices-data"].map((type) => (
-                <label key={type} className="flex items-center space-x-2">
+            <div className="flex space-x-4">
+              {["indices-backfill", "indices-data"].map(bucket => (
+                <label key={bucket} className="flex items-center space-x-2">
                   <input
                     type="radio"
                     name="bucket"
-                    value={type}
-                    checked={bucketType === type}
-                    onChange={() => setBucketType(type)}
-                    className="h-4 w-4"
+                    value={bucket}
+                    checked={bucketType === bucket}
+                    onChange={() => setBucketType(bucket)}
+                    className="h-4 w-4 text-indigo-600"
                   />
-                  <span className="text-sm text-gray-600 capitalize">{type.replace("-", " ")}</span>
+                  <span className="text-sm text-gray-600 capitalize">{bucket.replace("-", " ")}</span>
                 </label>
               ))}
             </div>
@@ -189,9 +235,12 @@ export default function DownloadForm() {
       )}
 
       {requiresGranularity && (
-        <SelectInput label="Granularity" value={granularity} setValue={setGranularity} options={[
-          "1m", "5m", "10m", "15m", "30m", "1h", "4h", "1d"
-        ]} />
+        <SelectInput
+          label="Granularity"
+          value={granularity}
+          setValue={setGranularity}
+          options={["1m", "5m", "10m", "15m", "30m", "1h", "4h", "1d"]}
+        />
       )}
 
       <InputField label="Start Date (YYYY-MM-DD)" value={startDate} setValue={setStartDate} />
@@ -217,7 +266,37 @@ export default function DownloadForm() {
         </button>
       )}
 
-      <div className="mt-4 text-sm bg-gray-100 p-3 rounded min-h-[50px]">{status}</div>
+      <div className="mt-4 text-sm bg-gray-100 p-3 rounded whitespace-pre-wrap">
+        {status && (
+          <>
+            {status.inputs && (
+              <div>
+                <strong>📥 Inputs:</strong> {JSON.stringify(status.inputs, null, 2)}
+              </div>
+            )}
+            {status.prefixes && (
+              <div className="mt-2">
+                <strong>📁 Generated Prefixes:</strong>
+                <ul className="list-disc pl-5">
+                  {status.prefixes.map((prefix, idx) => (
+                    <li key={idx}>{prefix}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {status.log && (
+              <div className="mt-2">
+                {status.log.map((line, idx) => (
+                  <div key={idx}>{line}</div>
+                ))}
+              </div>
+            )}
+            {status.error && (
+              <div className="text-red-600 mt-2">{status.error}</div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
