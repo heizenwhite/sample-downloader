@@ -1,16 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { v4 as uuidv4 } from "uuid";
 import InputField from "./InputField";
 import SelectInput from "./SelectInput";
 import Spinner from "./Spinner";
+import Select from "react-select";
 
 export default function DownloadForm() {
   const [product, setProduct] = useState("Trades");
   const [exchangeCode, setExchangeCode] = useState("");
-  const [instrumentClass, setInstrumentClass] = useState("");
-  const [instrumentCode, setInstrumentCode] = useState("");
+  const [instrumentClass, setInstrumentClass] = useState<string[]>([]);
+  const [instrumentCode, setInstrumentCode] = useState<string[]>([]);
   const [indexCode, setIndexCode] = useState("");
   const [granularity, setGranularity] = useState("1m");
   const [startDate, setStartDate] = useState("");
@@ -19,12 +20,53 @@ export default function DownloadForm() {
   const [status, setStatus] = useState("");
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [requestId, setRequestId] = useState<string | null>(null);
-
   const [bucketType, setBucketType] = useState("indices-backfill");
+
+  const [availableClasses, setAvailableClasses] = useState<string[]>([]);
+  const [availableInstrumentCodes, setAvailableInstrumentCodes] = useState<string[]>([]);
 
   const requiresGranularity = ["OHLCV", "VWAP", "COHLCVVWAP"].includes(product);
   const isIndexProduct = ["Index", "Index Multi-Assets"].includes(product);
   const storage = isIndexProduct ? "wasabi" : "s3";
+
+  useEffect(() => {
+    const fetchInstruments = async () => {
+      if (!exchangeCode) return;
+  
+      const exchangeCodes = exchangeCode.split(",").map(e => e.trim()).filter(Boolean);
+      if (exchangeCodes.length === 0) return;
+  
+      try {
+        let allClasses = new Set<string>();
+        let allSymbols = new Set<string>();
+  
+        for (const code of exchangeCodes) {
+          const url = `https://reference-data-api.kaiko.io/v1/instruments?exchange_code=${code}&page_size=10000`;
+          const res = await fetch(url);
+          const json = await res.json();
+  
+          if (json?.data?.length) {
+            for (const item of json.data) {
+              if (item.kaiko_legacy_symbol) allSymbols.add(item.kaiko_legacy_symbol);
+              if (item.class) allClasses.add(item.class);
+            }
+          }
+        }
+  
+        setAvailableClasses(Array.from(allClasses).sort());
+        setAvailableInstrumentCodes(Array.from(allSymbols).sort());
+      } catch (err) {
+        console.error("Instrument fetch failed:", err);
+        setAvailableClasses([]);
+        setAvailableInstrumentCodes([]);
+      }
+    };
+  
+    // Debounce the fetch (wait 500ms after typing stops)
+    const timeout = setTimeout(fetchInstruments, 500);
+    return () => clearTimeout(timeout);
+  }, [exchangeCode]);
+  
 
   const handleDownload = async () => {
     const id = uuidv4();
@@ -38,8 +80,8 @@ export default function DownloadForm() {
       const params: Record<string, string> = {
         product,
         exchange_code: exchangeCode,
-        instrument_class: instrumentClass,
-        instrument_code: instrumentCode,
+        instrument_class: instrumentClass.join(","),
+        instrument_code: instrumentCode.join(","),
         index_code: indexCode,
         granularity,
         start_date: startDate,
@@ -49,24 +91,13 @@ export default function DownloadForm() {
         bucket: bucketType,
       };
 
-      const urlParams = new URLSearchParams();
-      Object.entries(params).forEach(([key, val]) => {
-        if (val) urlParams.append(key, val);
-      });
-
       const backendUrl = process.env.NEXT_PUBLIC_API_BASE!;
-
       const res = await fetch(`${backendUrl}/api/download/download/`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(params),
         signal: controller.signal,
       });
-          
-      
-      
 
       if (!res.ok) {
         const text = await res.text();
@@ -82,11 +113,7 @@ export default function DownloadForm() {
       a.click();
       setStatus("✅ Download started!");
     } catch (err: any) {
-      if (err.name === "AbortError") {
-        setStatus("⚠️ Download cancelled!");
-      } else {
-        setStatus(`❌ ${err.message}`);
-      }
+      setStatus(err.name === "AbortError" ? "⚠️ Download cancelled!" : `❌ ${err.message}`);
     } finally {
       setLoading(false);
       setAbortController(null);
@@ -95,21 +122,14 @@ export default function DownloadForm() {
   };
 
   const cancelDownload = async () => {
-    if (abortController) {
-      abortController.abort();
-    }
-  
+    if (abortController) abortController.abort();
     if (requestId) {
       const backendUrl = process.env.NEXT_PUBLIC_API_BASE!;
-      await fetch(`${backendUrl}/api/cancel/?request_id=${requestId}`, {
-        method: "POST",
-      });
+      await fetch(`${backendUrl}/api/cancel/?request_id=${requestId}`, { method: "POST" });
       setStatus("⚠️ Download cancelled (backend)!");
     }
-  
     setLoading(false);
   };
-  
 
   return (
     <div className="space-y-4">
@@ -121,43 +141,48 @@ export default function DownloadForm() {
       {!isIndexProduct && (
         <>
           <InputField label="Exchange Code(s)" value={exchangeCode} setValue={setExchangeCode} />
-          <InputField label="Instrument Class(es)" value={instrumentClass} setValue={setInstrumentClass} />
-          <InputField label="Instrument Code(s)" value={instrumentCode} setValue={setInstrumentCode} />
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Instrument Class(es)</label>
+            <Select
+              isMulti
+              options={availableClasses.map((c) => ({ label: c, value: c }))}
+              value={instrumentClass.map((v) => ({ label: v, value: v }))}
+              onChange={(selected) => setInstrumentClass(selected.map((s) => s.value))}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Instrument Code(s)</label>
+            <Select
+              isMulti
+              options={availableInstrumentCodes.map((c) => ({ label: c, value: c }))}
+              value={instrumentCode.map((v) => ({ label: v, value: v }))}
+              onChange={(selected) => setInstrumentCode(selected.map((s) => s.value))}
+            />
+          </div>
         </>
       )}
 
       {isIndexProduct && (
         <>
           <InputField label="Index Code(s)" value={indexCode} setValue={setIndexCode} />
-
-          {/* Radio buttons for bucket selection */}
           <div className="space-y-2">
             <label className="block text-sm font-medium text-gray-700">Select Bucket</label>
             <div className="flex items-center space-x-4">
-              <div className="flex items-center">
-                <input
-                  type="radio"
-                  id="indices-backfill"
-                  name="bucket"
-                  value="indices-backfill"
-                  checked={bucketType === "indices-backfill"}
-                  onChange={() => setBucketType("indices-backfill")}
-                  className="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
-                />
-                <label htmlFor="indices-backfill" className="ml-2 text-sm text-gray-600">Indices Backfill</label>
-              </div>
-              <div className="flex items-center">
-                <input
-                  type="radio"
-                  id="indices-data"
-                  name="bucket"
-                  value="indices-data"
-                  checked={bucketType === "indices-data"}
-                  onChange={() => setBucketType("indices-data")}
-                  className="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
-                />
-                <label htmlFor="indices-data" className="ml-2 text-sm text-gray-600">Indices Data</label>
-              </div>
+              {["indices-backfill", "indices-data"].map((type) => (
+                <label key={type} className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    name="bucket"
+                    value={type}
+                    checked={bucketType === type}
+                    onChange={() => setBucketType(type)}
+                    className="h-4 w-4"
+                  />
+                  <span className="text-sm text-gray-600 capitalize">{type.replace("-", " ")}</span>
+                </label>
+              ))}
             </div>
           </div>
         </>
