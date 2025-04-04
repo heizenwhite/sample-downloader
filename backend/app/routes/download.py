@@ -21,6 +21,7 @@ class DownloadRequest(BaseModel):
     end_date: str
     storage: str = "s3"
     request_id: str = None
+    bucket: str = "indices-backfill"  # ✅ Add this line
 
 def cleanup_folder(folder: str):
     if not os.path.exists(folder):
@@ -78,8 +79,10 @@ async def download_data(
             prefixes=prefixes,
             storage=req.storage,
             download_folder=download_folder,
-            request_id=req.request_id
+            request_id=req.request_id,
+            bucket_type=req.bucket  # ✅ Use the value from the request
         )
+
 
         # Cleanup tasks
         background_tasks.add_task(os.remove, zip_path)

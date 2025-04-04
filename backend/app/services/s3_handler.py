@@ -1,89 +1,88 @@
-# services/s3_handler.py
-
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import boto3
 import gzip
 import shutil
 import os
 from app.utils.auth import get_s3_client, get_wasabi_client
 from app.utils.compress import compress_files
-from app.utils.cancellation_registry import cancellation_registry  # ✅ correct import
+from app.utils.cancellation_registry import cancellation_registry
 
 class DownloadCancelled(Exception):
     pass
+
+def download_and_decompress(s3_client, bucket_name, key, download_folder, request_id):
+    if request_id and cancellation_registry.get(request_id):
+        print(f"❌ Cancelled before processing file: {key}")
+        return None
+
+    local_path = os.path.join(download_folder, os.path.basename(key))
+    try:
+        print(f"⬇️ Downloading {key}...")
+        s3_client.download_file(bucket_name, key, local_path)
+
+        if local_path.endswith(".gz"):
+            decompressed_path = local_path[:-3]
+            with gzip.open(local_path, "rb") as f_in, open(decompressed_path, "wb") as f_out:
+                shutil.copyfileobj(f_in, f_out)
+            os.remove(local_path)
+            return decompressed_path
+        else:
+            return local_path
+    except Exception as e:
+        print(f"❌ Failed to download {key}: {e}")
+        return None
 
 async def fetch_files(
     prefixes,
     storage,
     download_folder,
-    request_id=None,  # ✅ MFA removed, only request_id remains
-    bucket_type="indices-backfill",  # ✅ MFA removed, only bucket_type remains
+    request_id=None,
+    bucket_type="indices-backfill",
 ):
-    """
-    Download files from S3 or Wasabi for the given prefixes.
-    """
     os.makedirs(download_folder, exist_ok=True)
 
-    # Select S3 or Wasabi client
     if storage == "s3":
-        # S3 will always use the kaiko-market-data bucket
         s3_client = get_s3_client()
-        bucket_name = "kaiko-market-data"  # Fixed bucket name for S3
-
+        bucket_name = "kaiko-market-data"
     elif storage == "wasabi":
         s3_client = get_wasabi_client()
-
-        # Select bucket based on bucket_type for Wasabi
-        if bucket_type == "indices-backfill":
-            bucket_name = "indices-backfill"  # Wasabi bucket for backfill data
-        elif bucket_type == "indices-data":
-            bucket_name = "indices-data"  # Wasabi bucket for indices data
-        else:
-            raise ValueError(f"Unsupported bucket type for Wasabi: {bucket_type}")
+        bucket_name = "indices-backfill" if bucket_type == "indices-backfill" else "indices-data"
     else:
         raise ValueError("Unsupported storage type")
 
+    print(f"📦 Using bucket: {bucket_name}")
     downloaded_files = []
 
     try:
-        for prefix in prefixes:
-            if request_id and cancellation_registry.get(request_id):
-                print(f"❌ Cancelled before processing prefix: {prefix}")
-                raise DownloadCancelled(f"Request {request_id} was cancelled")
+        with ThreadPoolExecutor(max_workers=12) as executor:
+            futures = []
 
-            # Fetch the list of objects for the given prefix
-            response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
-            if "Contents" in response:
+            for prefix in prefixes:
+                if request_id and cancellation_registry.get(request_id):
+                    print(f"❌ Cancelled before processing prefix: {prefix}")
+                    raise DownloadCancelled(f"Request {request_id} was cancelled")
+
+                response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
+                if "Contents" not in response:
+                    print(f"❌ No files found for prefix: {prefix}")
+                    continue
+
                 for obj in response["Contents"]:
-                    if request_id and cancellation_registry.get(request_id):
-                        print(f"❌ Cancelled while processing file: {obj['Key']}")
-                        raise DownloadCancelled(f"Request {request_id} was cancelled")
+                    key = obj["Key"]
+                    futures.append(executor.submit(
+                        download_and_decompress,
+                        s3_client,
+                        bucket_name,
+                        key,
+                        download_folder,
+                        request_id
+                    ))
 
-                    file_key = obj["Key"]
-                    local_file_path = os.path.join(download_folder, os.path.basename(file_key))
+            for future in as_completed(futures):
+                result = future.result()
+                if result:
+                    downloaded_files.append(result)
 
-                    print(f"⬇️ Downloading {file_key}...")
-
-                    s3_client.download_file(bucket_name, file_key, local_file_path)
-
-                    if request_id and cancellation_registry.get(request_id):
-                        print(f"❌ Cancelled after downloading {file_key}")
-                        raise DownloadCancelled(f"Request {request_id} was cancelled")
-
-                    # Decompress if .gz
-                    if local_file_path.endswith(".gz"):
-                        decompressed_path = local_file_path[:-3]
-                        with gzip.open(local_file_path, "rb") as f_in:
-                            with open(decompressed_path, "wb") as f_out:
-                                shutil.copyfileobj(f_in, f_out)
-                        os.remove(local_file_path)
-                        local_file_path = decompressed_path
-
-                    downloaded_files.append(local_file_path)
-
-            else:
-                print(f"❌ No files found for prefix: {prefix}")
-
-        # Final check before compressing
         if request_id and cancellation_registry.get(request_id):
             print("❌ Cancelled before zipping files")
             raise DownloadCancelled(f"Request {request_id} was cancelled")
@@ -98,7 +97,6 @@ async def fetch_files(
         return zip_path, downloaded_files
 
     finally:
-        # Clean up partially downloaded files if cancelled
         if request_id and cancellation_registry.get(request_id):
             print("🧹 Cleaning up partial downloads due to cancellation...")
             for f in downloaded_files:
