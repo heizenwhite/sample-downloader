@@ -54,7 +54,7 @@ async def fetch_files(
     downloaded_files = []
 
     try:
-        with ThreadPoolExecutor(max_workers=12) as executor:
+        with ThreadPoolExecutor(max_workers=24) as executor:
             futures = []
 
             for prefix in prefixes:

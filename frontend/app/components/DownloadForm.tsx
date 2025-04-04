@@ -149,7 +149,7 @@ export default function DownloadForm() {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = "sample_data.zip";
+        a.download = `${product.replace(/\s+/g, "_")}.zip`;
         a.click();
         setStatus({ log: ["✅ Download started!"], inputs: params });
       }

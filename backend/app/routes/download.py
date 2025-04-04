@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import StreamingResponse
 from datetime import datetime
 from pydantic import BaseModel
 import os
@@ -22,6 +23,11 @@ class DownloadRequest(BaseModel):
     storage: str = "s3"
     request_id: str = None
     bucket: str = "indices-backfill"  # ✅ Add this line
+
+def read_in_chunks(file_path: str, chunk_size: int = 1024 * 1024):
+    with open(file_path, "rb") as f:
+        while chunk := f.read(chunk_size):
+            yield chunk
 
 def cleanup_folder(folder: str):
     if not os.path.exists(folder):
@@ -90,10 +96,12 @@ async def download_data(
             background_tasks.add_task(os.remove, file_path)
         background_tasks.add_task(cleanup_folder, download_folder)
 
-        return FileResponse(
-            path=zip_path,
-            filename=os.path.basename(zip_path),
+        return StreamingResponse(
+            read_in_chunks(zip_path),
             media_type="application/zip",
+            headers={
+                "Content-Disposition": f"attachment; filename={os.path.basename(zip_path)}"
+            },
             background=background_tasks
         )
 
