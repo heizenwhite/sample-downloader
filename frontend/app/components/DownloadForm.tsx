@@ -266,7 +266,7 @@ export default function DownloadForm() {
         </button>
       )}
 
-      <div className="mt-4 text-sm bg-gray-100 p-3 rounded whitespace-pre-wrap">
+      <div className="mt-4 text-sm bg-gray-100 p-3 rounded whitespace-pre-wrap text-black">
         {status && (
           <>
             {status.inputs && (
