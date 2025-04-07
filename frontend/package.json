@@ -10,6 +10,8 @@
     "tailwind:init": "tailwindcss init -p"
   },
   "dependencies": {
+    "firebase": "^11.6.0",
+    "firebaseui": "^6.1.0",
     "lodash": "^4.17.21",
     "lodash.debounce": "^4.0.8",
     "next": "15.2.3",
