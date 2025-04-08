@@ -1,6 +1,8 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.responses import StreamingResponse
+from fastapi import Depends
+from app.utils.firebase_auth import verify_token
 from datetime import datetime
 from pydantic import BaseModel
 import os
@@ -47,6 +49,7 @@ def cleanup_folder(folder: str):
 async def download_data(
     background_tasks: BackgroundTasks,
     req: DownloadRequest,
+    user=Depends(verify_token),  # ✅ This enforces authentication
 ):
     try:
         if req.request_id and cancellation_registry.get(req.request_id):

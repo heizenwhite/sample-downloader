@@ -1,7 +1,13 @@
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
+from fastapi import Depends
+from app.utils.firebase_auth import verify_token
 
-router = APIRouter()
+router = APIRouter(
+    prefix="/api/test",
+    tags=["Test Endpoints"],
+    dependencies=[Depends(verify_token)],  # ✅ Protect all routes in this router
+)
 
 @router.get("/trades")
 async def test_trades():

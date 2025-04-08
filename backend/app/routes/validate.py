@@ -1,4 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query
+from fastapi import Depends
+from app.utils.firebase_auth import verify_token
 from typing import List
 from itertools import product as cartesian_product
 from app.services.kaiko_api import validate_combinations
@@ -9,7 +11,8 @@ router = APIRouter()
 async def validate_combinations_handler(
     exchange_code: str = Query(..., description="Comma-separated exchange codes (e.g., binc,okex,krkn)"),
     instrument_class: str = Query(..., description="Comma-separated classes (e.g., spot,future,perpetual-future)"),
-    instrument_code: str = Query(..., description="Comma-separated instrument codes (e.g., btcusdt,ethusdt)")
+    instrument_code: str = Query(..., description="Comma-separated instrument codes (e.g., btcusdt,ethusdt)"),
+    user=Depends(verify_token)
 ):
     try:
         # Split input strings into lists

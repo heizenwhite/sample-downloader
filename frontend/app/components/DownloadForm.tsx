@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from "uuid";
 import InputField from "./InputField";
 import SelectInput from "./SelectInput";
 import Spinner from "./Spinner";
+import { auth } from "../utils/firebase"; // Adjust the path if needed
 import dynamic from "next/dynamic";
 import debounce from "lodash.debounce";
 
@@ -133,12 +134,17 @@ export default function DownloadForm() {
       };
 
       const backendUrl = process.env.NEXT_PUBLIC_API_BASE!;
+      const token = await auth.currentUser?.getIdToken();
       const res = await fetch(`${backendUrl}/api/download/download/`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`, // ✅ Include token
+        },
         body: JSON.stringify(params),
         signal: controller.signal,
       });
+      
 
       const isJson = res.headers.get("Content-Type")?.includes("application/json");
       if (isJson) {
