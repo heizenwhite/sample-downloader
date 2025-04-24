@@ -30,7 +30,9 @@ export default function DownloadForm() {
     prefixes?: string[];
     log?: string[];
     error?: string;
-  } | null>(null);
+    downloaded_files?: string[];
+    skipped_files?: { key: string; reason: string }[];
+  } | null>(null);  
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [requestId, setRequestId] = useState<string | null>(null);
   const [bucketType, setBucketType] = useState("indices-backfill");
@@ -151,13 +153,35 @@ export default function DownloadForm() {
         const result = await res.json();
         setStatus(result);
       } else {
+        // 1. parse headers
+        const downloadedHeader = res.headers.get("X-Downloaded-Files") || "";
+        const skippedHeader = res.headers.get("X-Skipped-Files") || "";
+      
+        const downloaded = downloadedHeader
+          ? downloadedHeader.split(",").filter(Boolean)
+          : [];
+      
+        const skipped = skippedHeader
+          ? skippedHeader.split(",").map(e => {
+              const [key, reason] = e.split("::");
+              return { key, reason };
+            })
+          : [];
+      
+        // 2. download blob as before
         const blob = await res.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
         a.download = `${product.replace(/\s+/g, "_")}.zip`;
         a.click();
-        setStatus({ log: ["✅ Download started!"], inputs: params });
+      
+        // 3. include them in status
+        setStatus({
+          inputs: params,
+          downloaded_files: downloaded,
+          skipped_files: skipped,
+        });
       }
     } catch (err: any) {
       if (err.name === "AbortError") {
@@ -275,21 +299,30 @@ export default function DownloadForm() {
       <div className="mt-4 text-sm bg-gray-100 p-3 rounded whitespace-pre-wrap text-black">
         {status && (
           <>
-            {status.inputs && (
-              <div>
-                <strong>📥 Inputs:</strong> {JSON.stringify(status.inputs, null, 2)}
-              </div>
-            )}
-            {status.prefixes && (
+            {status.downloaded_files && status.downloaded_files.length > 0 && (
               <div className="mt-2">
-                <strong>📁 Generated Prefixes:</strong>
+                <strong>✅ Downloaded files:</strong>
                 <ul className="list-disc pl-5">
-                  {status.prefixes.map((prefix, idx) => (
-                    <li key={idx}>{prefix}</li>
+                  {status.downloaded_files.map((f, i) => (
+                    <li key={i}>{f}</li>
                   ))}
                 </ul>
               </div>
             )}
+
+            {status.skipped_files && status.skipped_files.length > 0 && (
+              <div className="mt-2">
+                <strong>⚠️ Skipped files:</strong>
+                <ul className="list-disc pl-5">
+                  {status.skipped_files.map((s, i) => (
+                    <li key={i}>
+                      {s.key} <em>({s.reason})</em>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             {status.log && (
               <div className="mt-2">
                 {status.log.map((line, idx) => (
@@ -297,6 +330,7 @@ export default function DownloadForm() {
                 ))}
               </div>
             )}
+
             {status.error && (
               <div className="text-red-600 mt-2">{status.error}</div>
             )}
