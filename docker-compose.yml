@@ -1,0 +1,28 @@
+version: "3.8"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file:
+      - .env               # contains FIREBASE_SERVICE_ACCOUNT, AWS creds, etc.
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/app:/app/app   # hot-reload if you like
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    env_file:
+      - .env               # for NEXT_PUBLIC_API_BASE
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+networks:
+  default:
+    driver: bridge

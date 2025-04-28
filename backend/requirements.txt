@@ -1,10 +1,28 @@
-fastapi==0.95.2       # Web framework for building APIs
-uvicorn==0.23.0       # ASGI server for running FastAPI
-boto3==1.28.67        # AWS SDK for Python to interact with S3/Wasabi
-python-multipart==0.0.6  # For handling file uploads
-requests==2.31.0      # For making HTTP requests to the Kaiko API
-pydantic==1.10.9      # Data validation and settings management
-pytest
-pytest-asyncio
-moto
-pytest-mock
+attr==0.3.2
+boto3==1.38.3
+botocore==1.38.3
+brotli==1.1.0
+brotlicffi==1.1.0.0
+chardet==5.2.0
+colorama==0.4.6
+ConfigParser==7.2.0
+cryptography==44.0.2
+docutils==0.21.2
+fastapi==0.115.12
+filelock==3.18.0
+firebase_admin==6.8.0
+h2==4.2.0
+HTMLParser==0.0.2
+ipython==9.2.0
+js==1.0
+keyring==25.6.0
+Pillow==11.2.1
+protobuf==6.30.2
+pydantic==2.11.3
+pyOpenSSL==25.0.0
+pytest==8.3.5
+python-dotenv==1.1.0
+redis==5.2.1
+simplejson==3.20.1
+Sphinx==8.2.3
+zstandard==0.23.0
