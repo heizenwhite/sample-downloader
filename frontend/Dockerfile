@@ -12,6 +12,13 @@ RUN npm ci --legacy-peer-deps
 # copy the rest of your Next.js code
 COPY frontend/app ./app
 COPY frontend/public ./public
+COPY frontend/styles ./styles
+COPY frontend/next.config.ts ./
+COPY frontend/next-env.d.ts ./
+COPY frontend/tailwind.config.js ./
+COPY frontend/postcss.config.js ./
+COPY frontend/tsconfig.json ./
+COPY frontend/global.d.ts ./
 
 # build the Next.js app
 RUN npm run build

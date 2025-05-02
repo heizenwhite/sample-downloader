@@ -8,9 +8,7 @@ services:
     env_file:
       - .env               # contains FIREBASE_SERVICE_ACCOUNT, AWS creds, etc.
     ports:
-      - "8000:8000"
-    volumes:
-      - ./backend/app:/app/app   # hot-reload if you like
+      - "8000:8000"        # ← publish container 8000 → host 8000
 
   frontend:
     build:
@@ -20,6 +18,8 @@ services:
       - .env               # for NEXT_PUBLIC_API_BASE
     ports:
       - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_BASE=http://host.docker.internal:8000
     depends_on:
       - backend
 

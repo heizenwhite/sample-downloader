@@ -61,7 +61,7 @@ export default function DownloadForm() {
         let token: string | null = null;
 
         do {
-          const params = new URLSearchParams({
+          const params: URLSearchParams = new URLSearchParams({
             exchange_code: ex,
             ...(token ? { continuation_token: token } : {}),
             page_size: "500",
@@ -136,12 +136,21 @@ export default function DownloadForm() {
       };
 
       const backendUrl = process.env.NEXT_PUBLIC_API_BASE!;
-      const token = await auth.currentUser?.getIdToken();
+      if (!auth) {
+        throw new Error("Firebase Auth is not initialized");
+      }
+      
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error("You must be signed in to download");
+      }
+      
+      const token = await user.getIdToken();
       const res = await fetch(`${backendUrl}/api/download/download/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`, // ✅ Include token
+          ...(token && { Authorization: `Bearer ${token}` }), // ✅ Include token
         },
         body: JSON.stringify(params),
         signal: controller.signal,
@@ -211,7 +220,7 @@ export default function DownloadForm() {
       <SelectInput
         label="Product"
         value={product}
-        setValue={setProduct}
+        setValue={(v: string | string[]) => setProduct(v as string)}
         options={[
           "Trades", "Order Book Snapshots", "Full Order Book", "Top Of Book",
           "OHLCV", "VWAP", "COHLCVVWAP", "Derivatives", "Index", "Index Multi-Assets"
@@ -268,7 +277,7 @@ export default function DownloadForm() {
         <SelectInput
           label="Granularity"
           value={granularity}
-          setValue={setGranularity}
+          setValue={(v: string | string[]) => setGranularity(v as string)}
           options={["1m", "5m", "10m", "15m", "30m", "1h", "4h", "1d"]}
         />
       )}

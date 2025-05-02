@@ -24,6 +24,9 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # copy your backend code
 COPY backend/app ./app
 COPY backend/app/main.py ./main.py
+COPY backend/serviceAccountKey.json ./serviceAccountKey.json
+
+ENV FIREBASE_SERVICE_ACCOUNT=/app/serviceAccountKey.json
 
 # expose the port the app runs on
 EXPOSE 8000
