@@ -1,7 +1,7 @@
+# wrangler.toml
 name = "sample-downloader-frontend"
-type = "static"
+type = "javascript"
 
-# tell Pages to publish only these dirs
-site = { bucket = ".next", include = ["**/*"], exclude = ["cache/**"] }
-
-# (you can still set env vars here if you later decide to use Workers, but for Pages you just need the site stanza)
+[build]
+command = "npm run build"
+pages_build_output_dir = ".next"   # ← tell Pages “after build, publish .next, not the cache”
