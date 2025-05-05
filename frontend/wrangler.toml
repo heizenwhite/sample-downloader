@@ -1,0 +1,7 @@
+name = "sample-downloader-frontend"
+type = "static"
+
+# tell Pages to publish only these dirs
+site = { bucket = ".next", include = ["**/*"], exclude = ["cache/**"] }
+
+# (you can still set env vars here if you later decide to use Workers, but for Pages you just need the site stanza)

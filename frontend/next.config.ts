@@ -1,8 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // skip webpack’s persistent build cache so .next/cache stays small
+  experimental: {
+    webpackBuildCache: false,
+  },
+  // if you’re still skipping lint errors in CI:
   eslint: {
-    // Prevent Next.js from failing the production build
-    // when it encounters lint errors
     ignoreDuringBuilds: true,
   },
 };
