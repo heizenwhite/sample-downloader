@@ -1,7 +1,0 @@
-# wrangler.toml
-name = "sample-downloader-frontend"
-type = "javascript"
-
-[build]
-command = "npm run build"
-pages_build_output_dir = ".next"   # ← tell Pages “after build, publish .next, not the cache”
