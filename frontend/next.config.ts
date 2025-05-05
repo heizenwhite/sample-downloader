@@ -1,14 +1,9 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  // skip webpack’s persistent build cache so .next/cache stays small
-  output: 'export',
-  experimental: {
-    webpackBuildCache: false,
-  },
-  // if you’re still skipping lint errors in CI:
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+// next.config.ts
+import { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  output: "export",
+  eslint: { ignoreDuringBuilds: true },
 };
-export default nextConfig
-module.exports = nextConfig;
+
+export default nextConfig;
