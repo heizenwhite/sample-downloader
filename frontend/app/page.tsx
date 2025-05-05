@@ -1,7 +1,6 @@
 // app/page.tsx
 "use client";
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { auth } from "./utils/firebase";
 import DownloadForm from "./components/DownloadForm";
