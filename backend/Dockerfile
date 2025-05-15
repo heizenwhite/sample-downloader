@@ -4,7 +4,7 @@ FROM python:3.11-slim AS builder
 WORKDIR /app
 
 # install python deps
-COPY backend/requirements.txt .
+COPY requirements.txt .
 RUN pip install --upgrade pip \
  && pip install --no-cache-dir -r requirements.txt
 
@@ -22,9 +22,9 @@ COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/pytho
 COPY --from=builder /usr/local/bin /usr/local/bin
 
 # copy your backend code
-COPY backend/app ./app
-COPY backend/app/main.py ./main.py
-COPY backend/serviceAccountKey.json ./serviceAccountKey.json
+COPY app ./app
+COPY app/main.py ./main.py
+COPY serviceAccountKey.json ./serviceAccountKey.json
 
 ENV FIREBASE_SERVICE_ACCOUNT=/app/serviceAccountKey.json
 
