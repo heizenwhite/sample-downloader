@@ -8,6 +8,8 @@ import Spinner from "./Spinner";
 import { auth } from "../utils/firebase"; // Adjust the path if needed
 import dynamic from "next/dynamic";
 import debounce from "lodash.debounce";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 
 // Lazy load the virtualized multiselect component
 const MultiSelect = dynamic(() => import("./VirtualizedMultiSelect"), { ssr: false });
@@ -22,8 +24,8 @@ export default function DownloadForm() {
   const [rawInstruments, setRawInstruments] = useState<any[]>([]);
   const [indexCode, setIndexCode] = useState("");
   const [granularity, setGranularity] = useState("1m");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [startDate, setStartDate] = useState<Date | null>(null);
+  const [endDate, setEndDate]   = useState<Date | null>(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<{
     inputs?: Record<string, string>;
@@ -128,8 +130,8 @@ export default function DownloadForm() {
         instrument_code: instrumentCode.join(","),
         index_code: indexCode,
         granularity,
-        start_date: startDate,
-        end_date: endDate,
+        start_date: startDate ? startDate.toISOString() : "",
+        end_date:   endDate   ? endDate.toISOString()   : "",
         storage,
         request_id: id,
         bucket: bucketType,
@@ -282,8 +284,26 @@ export default function DownloadForm() {
         />
       )}
 
-      <InputField label="Start Date (YYYY-MM-DD)" value={startDate} setValue={setStartDate} />
-      <InputField label="End Date (YYYY-MM-DD)" value={endDate} setValue={setEndDate} />
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-gray-700">Start Date</label>
+        <DatePicker
+          selected={startDate}
+          onChange={(d: Date | null) => setStartDate(d)}
+          dateFormat="yyyy-MM-dd"
+          placeholderText="Select start date"
+          className="mt-1 block w-full rounded border-gray-300"
+        />
+      </div>
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-gray-700">End Date</label>
+        <DatePicker
+          selected={endDate}
+          onChange={(d: Date | null) => setEndDate(d)}
+          dateFormat="yyyy-MM-dd"
+          placeholderText="Select end date"
+          className="mt-1 block w-full rounded border-gray-300"
+        />
+      </div>
 
       <button
         onClick={handleDownload}
