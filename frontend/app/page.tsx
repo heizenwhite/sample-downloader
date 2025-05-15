@@ -1,5 +1,6 @@
-// app/page.tsx
 "use client";
+
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { auth } from "./utils/firebase";
@@ -16,7 +17,6 @@ export default function Home() {
 
   useEffect(() => {
     if (!auth) {
-      // no client auth available (e.g. at build time)
       setLoading(false);
       return;
     }
@@ -31,27 +31,41 @@ export default function Home() {
 
   return (
     <div className="relative min-h-screen">
+      {/* top-right user info + sign out */}
       {user && (
-        <div className="absolute top-4 right-4">
+        <div className="absolute top-4 right-4 flex items-center space-x-3">
+          <span className="text-sm text-gray-700">
+            Logged in as <strong className="font-medium">{user.email}</strong>
+          </span>
           <button
             onClick={() => auth && signOut(auth)}
-            className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded shadow transform hover:scale-105 transition duration-200 ease-in-out"
+            className="text-sm bg-red-600 hover:bg-red-700 text-white font-semibold py-1 px-3 rounded shadow transform hover:scale-105 transition duration-200 ease-in-out"
           >
             Sign Out
           </button>
         </div>
       )}
+
       <main className="p-10 max-w-2xl mx-auto">
-        {/* … your logo + title … */}
+        {/* logo + title */}
+        <div className="flex justify-center items-center mb-6 gap-4">
+          <Image
+            src="/Kaiko.svg"
+            alt="Super OPS Logo"
+            width={240}
+            height={120}
+            priority
+          />
+          <h1 className="text-xl font-semibold">CSV Sample Downloader</h1>
+        </div>
+
         {!user ? (
           <div className="flex justify-center items-center min-h-[60vh]">
             <FirebaseAuthUI />
           </div>
         ) : (
           <>
-            <p className="mb-4">
-              Logged in as <strong>{user.email || "Anonymous"}</strong>
-            </p>
+            {/* removed the old “Logged in as…” paragraph here */}
             <DownloadForm />
           </>
         )}

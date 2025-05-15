@@ -1,3 +1,4 @@
+// app/components/SelectInput.tsx
 "use client";
 
 import React from "react";
@@ -8,9 +9,21 @@ type Props = {
   setValue: (val: string | string[]) => void;
   options: string[];
   multi?: boolean;
+  /** wrapper div classes (spacing, background, etc.) */
+  className?: string;
+  /** classes applied directly to the <select> element */
+  selectClassName?: string;
 };
 
-export default function SelectInput({ label, value, setValue, options, multi = false }: Props) {
+export default function SelectInput({
+  label,
+  value,
+  setValue,
+  options,
+  multi = false,
+  className = "",
+  selectClassName = "",
+}: Props) {
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     if (multi) {
       const selected = Array.from(e.target.selectedOptions, (opt) => opt.value);
@@ -21,15 +34,21 @@ export default function SelectInput({ label, value, setValue, options, multi = f
   };
 
   return (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+    <div className={className}>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {label}
+      </label>
       <select
         multiple={multi}
         value={value}
         onChange={handleChange}
-        className="w-full border border-gray-300 rounded px-3 py-2"
+        className={`
+          w-full border border-gray-300 rounded px-3 py-2
+          focus:outline-none focus:ring-2 focus:ring-blue-500
+          ${selectClassName}
+        `}
       >
-        {!multi && <option value="">Select</option>}
+        {!multi && <option value="">Select...</option>}
         {options.map((opt) => (
           <option key={opt} value={opt}>
             {opt}

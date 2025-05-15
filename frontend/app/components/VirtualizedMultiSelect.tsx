@@ -15,6 +15,7 @@ type Props = {
   placeholder?: string;
   height?: number;
   itemHeight?: number;
+  hideSearchInput?: boolean;
 };
 
 export default function VirtualizedMultiSelect({
@@ -25,6 +26,7 @@ export default function VirtualizedMultiSelect({
   placeholder = "Select options...",
   height = 200,
   itemHeight = 36,
+  hideSearchInput = false,
 }: Props) {
   const [filter, setFilter] = useState("");
 
@@ -71,12 +73,14 @@ export default function VirtualizedMultiSelect({
   return (
     <div className="space-y-1">
       {label && <label className="block text-sm font-medium text-gray-700">{label}</label>}
-      <input
-        type="text"
-        placeholder={placeholder}
-        onChange={(e) => debouncedFilter(e.target.value)}
-        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-      />
+      {!hideSearchInput && (
+        <input
+          type="text"
+          placeholder={placeholder}
+          onChange={(e) => debouncedFilter(e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+        />
+      )}
       <div
         className="border border-gray-300 rounded-md overflow-hidden"
         style={{ height }}

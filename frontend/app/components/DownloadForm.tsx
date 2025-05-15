@@ -1,18 +1,21 @@
+// app/components/DownloadForm.tsx
 "use client";
 
 import { useEffect, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import InputField from "./InputField";
-import SelectInput from "./SelectInput";
-import Spinner from "./Spinner";
-import { auth } from "../utils/firebase"; // Adjust the path if needed
 import dynamic from "next/dynamic";
 import debounce from "lodash.debounce";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
+import { auth } from "../utils/firebase";
+import InputField from "./InputField";
+import SelectInput from "./SelectInput";
+import Spinner from "./Spinner";
 
-// Lazy load the virtualized multiselect component
-const MultiSelect = dynamic(() => import("./VirtualizedMultiSelect"), { ssr: false });
+const VirtualizedMultiSelect = dynamic(
+  () => import("./VirtualizedMultiSelect"),
+  { ssr: false }
+);
 
 const KAIKO_INSTRUMENTS_API = "https://reference-data-api.kaiko.io/v1/instruments";
 
@@ -25,16 +28,16 @@ export default function DownloadForm() {
   const [indexCode, setIndexCode] = useState("");
   const [granularity, setGranularity] = useState("1m");
   const [startDate, setStartDate] = useState<Date | null>(null);
-  const [endDate, setEndDate]   = useState<Date | null>(null);
+  const [endDate, setEndDate] = useState<Date | null>(null);
+  const [codeFilter, setCodeFilter] = useState("");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<{
     inputs?: Record<string, string>;
-    prefixes?: string[];
     log?: string[];
     error?: string;
     downloaded_files?: string[];
     skipped_files?: { key: string; reason: string }[];
-  } | null>(null);  
+  } | null>(null);
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [requestId, setRequestId] = useState<string | null>(null);
   const [bucketType, setBucketType] = useState("indices-backfill");
@@ -46,53 +49,49 @@ export default function DownloadForm() {
   const isIndexProduct = ["Index", "Index Multi-Assets"].includes(product);
   const storage = isIndexProduct ? "wasabi" : "s3";
 
-  const debouncedFetchInstruments = debounce(async (
-    exchange: string,
-    isIndexProduct: boolean,
-    setRawInstruments: Function,
-    setAvailableClasses: Function
-  ) => {
-    if (!exchange || isIndexProduct) return;
+  // fetch instrument classes once user enters an exchange
+  const debouncedFetch = debounce(
+    async (exchange: string) => {
+      if (!exchange || isIndexProduct) return;
+      const exchanges = exchange.split(",").map((e) => e.trim());
+      const all: any[] = [];
+      const classes = new Set<string>();
 
-    const exchanges = exchange.split(",").map((e) => e.trim());
-    const allInstruments: any[] = [];
-    const uniqueClasses = new Set<string>();
-
-    try {
-      for (const ex of exchanges) {
-        let token: string | null = null;
-
-        do {
-          const params: URLSearchParams = new URLSearchParams({
-            exchange_code: ex,
-            ...(token ? { continuation_token: token } : {}),
-            page_size: "500",
-          });
-
-          const res = await fetch(`${KAIKO_INSTRUMENTS_API}?${params}`);
-          const data = await res.json();
-
-          if (Array.isArray(data.data)) {
-            for (const item of data.data) {
-              allInstruments.push(item);
-              if (item.class) uniqueClasses.add(item.class);
-            }
-          }
-
-          token = data.continuation_token || null;
-        } while (token);
+      try {
+        for (const ex of exchanges) {
+          let token: string | null = null;
+          do {
+            const params = new URLSearchParams({
+              exchange_code: ex,
+              ...(token ? { continuation_token: token } : {}),
+              page_size: "500",
+            });
+            const res: Response = await fetch(`${KAIKO_INSTRUMENTS_API}?${params}`);
+            const json: { data?: any[]; continuation_token?: string } = await res.json();
+            json.data?.forEach((i: any) => {
+              all.push(i);
+              i.class && classes.add(i.class);
+            });
+            token = json.continuation_token || null;
+          } while (token);
+        }
+        setRawInstruments(all);
+        setAvailableClasses(Array.from(classes).sort());
+      } catch {
+        /* swallow */
       }
+    },
+    500,
+    { leading: false }
+  );
 
-      setRawInstruments(allInstruments);
-      setAvailableClasses(Array.from(uniqueClasses).sort());
-    } catch (err) {
-      console.error("Instrument fetch failed:", err);
-    }
-  }, 500);
+  const displayedCodes = availableCodes.filter((c) =>
+    c.toLowerCase().includes(codeFilter.toLowerCase())
+  );
 
   useEffect(() => {
     if (!isIndexProduct && exchangeCode) {
-      debouncedFetchInstruments(exchangeCode, isIndexProduct, setRawInstruments, setAvailableClasses);
+      debouncedFetch(exchangeCode);
     } else {
       setRawInstruments([]);
       setAvailableClasses([]);
@@ -101,16 +100,14 @@ export default function DownloadForm() {
   }, [exchangeCode, isIndexProduct]);
 
   useEffect(() => {
-    if (!isIndexProduct && rawInstruments.length > 0) {
-      const filtered = rawInstruments.filter((item) =>
-        instrumentClass.length === 0 || instrumentClass.includes(item.class)
+    if (!isIndexProduct && rawInstruments.length) {
+      const filtered = rawInstruments.filter((i) =>
+        !instrumentClass.length || instrumentClass.includes(i.class)
       );
-
-      const symbols = Array.from(
-        new Set(filtered.map((item) => item.kaiko_legacy_symbol).filter(Boolean))
+      const syms = Array.from(
+        new Set(filtered.map((i) => i.kaiko_legacy_symbol).filter(Boolean))
       ).sort();
-
-      setAvailableCodes(symbols);
+      setAvailableCodes(syms);
     }
   }, [instrumentClass, rawInstruments, isIndexProduct]);
 
@@ -123,82 +120,63 @@ export default function DownloadForm() {
     setAbortController(controller);
 
     try {
-      const params: Record<string, string> = {
+      const payload = {
         product,
         exchange_code: exchangeCode,
         instrument_class: instrumentClass.join(","),
         instrument_code: instrumentCode.join(","),
         index_code: indexCode,
         granularity,
-        start_date: startDate ? startDate.toISOString() : "",
-        end_date:   endDate   ? endDate.toISOString()   : "",
+        start_date: startDate?.toISOString() ?? "",
+        end_date: endDate?.toISOString() ?? "",
         storage,
         request_id: id,
         bucket: bucketType,
       };
-
-      const backendUrl = process.env.NEXT_PUBLIC_API_BASE!;
-      if (!auth) {
-        throw new Error("Firebase Auth is not initialized");
-      }
-      
-      const user = auth.currentUser;
-      if (!user) {
-        throw new Error("You must be signed in to download");
-      }
-      
+      const user = auth!.currentUser;
+      if (!user) throw new Error("You must be signed in");
       const token = await user.getIdToken();
-      const res = await fetch(`${backendUrl}/api/download/download/`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token && { Authorization: `Bearer ${token}` }), // ✅ Include token
-        },
-        body: JSON.stringify(params),
-        signal: controller.signal,
-      });
-      
-
-      const isJson = res.headers.get("Content-Type")?.includes("application/json");
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE}/api/download/download/`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        }
+      );
+      const isJson = res.headers
+        .get("Content-Type")
+        ?.includes("application/json");
       if (isJson) {
-        const result = await res.json();
-        setStatus(result);
+        setStatus(await res.json());
       } else {
-        // 1. parse headers
-        const downloadedHeader = res.headers.get("X-Downloaded-Files") || "";
-        const skippedHeader = res.headers.get("X-Skipped-Files") || "";
-      
-        const downloaded = downloadedHeader
-          ? downloadedHeader.split(",").filter(Boolean)
-          : [];
-      
-        const skipped = skippedHeader
-          ? skippedHeader.split(",").map(e => {
-              const [key, reason] = e.split("::");
-              return { key, reason };
-            })
-          : [];
-      
-        // 2. download blob as before
+        // parse headers & download
+        const dl = (res.headers.get("X-Downloaded-Files") || "")
+          .split(",")
+          .filter(Boolean);
+        const sk = (res.headers.get("X-Skipped-Files") || "")
+          .split(",")
+          .map((e) => {
+            const [key, reason] = e.split("::");
+            return { key, reason };
+          });
         const blob = await res.blob();
-        const url = window.URL.createObjectURL(blob);
+        const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
         a.download = `${product.replace(/\s+/g, "_")}.zip`;
         a.click();
-      
-        // 3. include them in status
-        setStatus({
-          inputs: params,
-          downloaded_files: downloaded,
-          skipped_files: skipped,
-        });
+        setStatus({ downloaded_files: dl, skipped_files: sk });
       }
     } catch (err: any) {
       if (err.name === "AbortError") {
-        setStatus({ log: ["⚠️ Download cancelled!"] });
+        setStatus({ log: ["⚠️ Download cancelled"] });
       } else {
-        setStatus({ error: `❌ ${err.message}` });
+        setStatus({ error: err.message });
       }
     } finally {
       setLoading(false);
@@ -208,164 +186,231 @@ export default function DownloadForm() {
   };
 
   const cancelDownload = async () => {
-    if (abortController) abortController.abort();
+    abortController?.abort();
     if (requestId) {
-      const backendUrl = process.env.NEXT_PUBLIC_API_BASE!;
-      await fetch(`${backendUrl}/api/cancel/?request_id=${requestId}`, { method: "POST" });
-      setStatus({ log: ["⚠️ Download cancelled (backend)!"] });
+      await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE}/api/cancel/?request_id=${requestId}`,
+        { method: "POST" }
+      );
+      setStatus({ log: ["⚠️ Download cancelled (backend)"] });
     }
     setLoading(false);
   };
 
   return (
-    <div className="space-y-4">
+    <div className="bg-gray-900/60 backdrop-blur-md rounded-lg p-8 shadow-xl space-y-6">
+      {/* Product */}
       <SelectInput
         label="Product"
         value={product}
-        setValue={(v: string | string[]) => setProduct(v as string)}
+        setValue={(v) => setProduct(v as string)}
         options={[
-          "Trades", "Order Book Snapshots", "Full Order Book", "Top Of Book",
-          "OHLCV", "VWAP", "COHLCVVWAP", "Derivatives", "Index", "Index Multi-Assets"
+          "Trades",
+          "Order Book Snapshots",
+          "Full Order Book",
+          "Top Of Book",
+          "OHLCV",
+          "VWAP",
+          "COHLCVVWAP",
+          "Derivatives",
+          "Index",
+          "Index Multi-Assets",
         ]}
+        className="mb-4 bg-gray-800 p-4 rounded-lg"
+        selectClassName="bg-gray-900 text-white text-sm"
       />
 
+      {/* Exchange */}
       {!isIndexProduct && (
-        <>
-          <InputField label="Exchange Code(s)" value={exchangeCode} setValue={setExchangeCode} />
+        <InputField
+          label="Exchange Code(s)"
+          value={exchangeCode}
+          setValue={setExchangeCode}
+          className="bg-gray-800"
+          inputClassName="px-4 py-2 text-sm text-white"
+        />
+      )}
 
-          <MultiSelect
-            label="Instrument Class(es)"
-            options={availableClasses}
-            selected={instrumentClass}
-            onChange={setInstrumentClass}
-            placeholder="Select class(es)..."
+      {/* Instrument Class */}
+      {!isIndexProduct && (
+        <VirtualizedMultiSelect
+          label="Instrument Class(es)"
+          options={availableClasses}
+          selected={instrumentClass}
+          onChange={setInstrumentClass}
+          placeholder="Pick class(es)…"
+          height={200}
+          itemHeight={36}
+        />
+      )}
+
+      {/* Instrument Codes */}
+      {!isIndexProduct && (
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-gray-300">
+            Instrument Code(s)
+          </label>
+
+          <input
+            type="text"
+            placeholder="Filter codes…"
+            value={codeFilter}
+            onChange={(e) => setCodeFilter(e.target.value)}
+            className="w-full bg-gray-800 text-white placeholder-gray-500 rounded-t-md border border-b-0 border-gray-700 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
 
-          <MultiSelect
-            label="Instrument Code(s)"
-            options={availableCodes}
+          <div className="flex justify-end space-x-4 text-sm">
+            <button
+              type="button"
+              onClick={() => setInstrumentCode(displayedCodes)}
+              className="text-indigo-400 hover:text-indigo-300"
+            >
+              Select All
+            </button>
+            <button
+              type="button"
+              onClick={() => setInstrumentCode([])}
+              className="text-red-400 hover:text-red-300"
+            >
+              Clear
+            </button>
+          </div>
+
+          <VirtualizedMultiSelect
+            options={displayedCodes}
             selected={instrumentCode}
             onChange={setInstrumentCode}
-            placeholder="Select code(s)..."
+            placeholder="Pick one or more codes…"
+            hideSearchInput
+            height={240}
+            itemHeight={32}
           />
-        </>
+        </div>
+      )}
+
+      {/* Index-only */}
+      {isIndexProduct && (
+        <InputField
+          label="Index Code(s)"
+          value={indexCode}
+          setValue={setIndexCode}
+          className="bg-gray-800"
+          inputClassName="px-4 py-2 text-sm text-white"
+        />
       )}
 
       {isIndexProduct && (
-        <>
-          <InputField label="Index Code(s)" value={indexCode} setValue={setIndexCode} />
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">Select Bucket</label>
-            <div className="flex space-x-4">
-              {["indices-backfill", "indices-data"].map(bucket => (
-                <label key={bucket} className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    name="bucket"
-                    value={bucket}
-                    checked={bucketType === bucket}
-                    onChange={() => setBucketType(bucket)}
-                    className="h-4 w-4 text-indigo-600"
-                  />
-                  <span className="text-sm text-gray-600 capitalize">{bucket.replace("-", " ")}</span>
-                </label>
-              ))}
-            </div>
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-gray-300">
+            Bucket
+          </label>
+          <div className="flex space-x-4">
+            {["indices-backfill", "indices-data"].map((b) => (
+              <label
+                key={b}
+                className="flex items-center space-x-2 text-sm text-white"
+              >
+                <input
+                  type="radio"
+                  name="bucket"
+                  value={b}
+                  checked={bucketType === b}
+                  onChange={() => setBucketType(b)}
+                  className="h-4 w-4 text-indigo-500"
+                />
+                <span>{b.replace("-", " ")}</span>
+              </label>
+            ))}
           </div>
-        </>
+        </div>
       )}
 
+      {/* Granularity */}
       {requiresGranularity && (
         <SelectInput
           label="Granularity"
           value={granularity}
-          setValue={(v: string | string[]) => setGranularity(v as string)}
+          setValue={(v) => setGranularity(v as string)}
           options={["1m", "5m", "10m", "15m", "30m", "1h", "4h", "1d"]}
+          className="bg-gray-800 p-4 rounded-lg"
+          selectClassName="bg-gray-900 text-white text-sm"
         />
       )}
 
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-gray-700">Start Date</label>
-        <DatePicker
-          selected={startDate}
-          onChange={(d: Date | null) => setStartDate(d)}
-          dateFormat="yyyy-MM-dd"
-          placeholderText="Select start date"
-          className="mt-1 block w-full rounded border-gray-300"
-        />
-      </div>
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-gray-700">End Date</label>
-        <DatePicker
-          selected={endDate}
-          onChange={(d: Date | null) => setEndDate(d)}
-          dateFormat="yyyy-MM-dd"
-          placeholderText="Select end date"
-          className="mt-1 block w-full rounded border-gray-300"
-        />
+      {/* Dates */}
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-300">
+            Start Date
+          </label>
+          <DatePicker
+            selected={startDate}
+            onChange={setStartDate}
+            dateFormat="yyyy-MM-dd"
+            placeholderText="Select start"
+            className="w-full bg-gray-800 text-white placeholder-gray-500 rounded-md border border-gray-700 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-300">
+            End Date
+          </label>
+          <DatePicker
+            selected={endDate}
+            onChange={setEndDate}
+            dateFormat="yyyy-MM-dd"
+            placeholderText="Select end"
+            className="w-full bg-gray-800 text-white placeholder-gray-500 rounded-md border border-gray-700 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
       </div>
 
+      {/* Download button */}
       <button
         onClick={handleDownload}
-        className={`w-full flex justify-center items-center gap-2 ${
-          loading ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
-        } text-white py-2 rounded`}
         disabled={loading}
+        className={`w-full flex justify-center items-center gap-2 text-white font-medium py-3 rounded-md transition
+          ${
+            loading
+              ? "bg-indigo-700 cursor-wait"
+              : "bg-indigo-600 hover:bg-indigo-500"
+          }`}
       >
         {loading && <Spinner />}
-        {loading ? "Processing..." : "Download CSVs"}
+        {loading ? "Processing…" : "Download CSVs"}
       </button>
 
+      {/* Cancel */}
       {loading && (
         <button
           onClick={cancelDownload}
-          className="w-full bg-red-500 hover:bg-red-600 text-white py-2 rounded"
+          className="w-full bg-red-600 hover:bg-red-500 text-white py-2 rounded-md"
         >
-          Cancel Download
+          Cancel
         </button>
       )}
 
-      <div className="mt-4 text-sm bg-gray-100 p-3 rounded whitespace-pre-wrap text-black">
-        {status && (
-          <>
-            {status.downloaded_files && status.downloaded_files.length > 0 && (
-              <div className="mt-2">
-                <strong>✅ Downloaded files:</strong>
-                <ul className="list-disc pl-5">
-                  {status.downloaded_files.map((f, i) => (
-                    <li key={i}>{f}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {status.skipped_files && status.skipped_files.length > 0 && (
-              <div className="mt-2">
-                <strong>⚠️ Skipped files:</strong>
-                <ul className="list-disc pl-5">
-                  {status.skipped_files.map((s, i) => (
-                    <li key={i}>
-                      {s.key} <em>({s.reason})</em>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {status.log && (
-              <div className="mt-2">
-                {status.log.map((line, idx) => (
-                  <div key={idx}>{line}</div>
-                ))}
-              </div>
-            )}
-
-            {status.error && (
-              <div className="text-red-600 mt-2">{status.error}</div>
-            )}
-          </>
-        )}
-      </div>
+      {/* Status */}
+      {status && (
+        <div className="mt-4 text-sm bg-gray-800 text-white p-4 rounded-md space-y-2">
+          {status.downloaded_files?.length && (
+            <div>
+              <strong>✅ Downloaded:</strong>{" "}
+              {status.downloaded_files.join(", ")}
+            </div>
+          )}
+          {status.skipped_files?.length && (
+            <div>
+              <strong>⚠️ Skipped:</strong>{" "}
+              {status.skipped_files.map((s) => s.key).join(", ")}
+            </div>
+          )}
+          {status.log?.map((l, i) => (
+            <div key={i}>{l}</div>
+          ))}
+          {status.error && <div className="text-red-400">{status.error}</div>}
+        </div>
+      )}
     </div>
   );
 }
