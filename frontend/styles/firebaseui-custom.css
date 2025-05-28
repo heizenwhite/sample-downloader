@@ -1,87 +1,107 @@
-/* Root container */
+/* ────────────────────────────────────────────────────────────────────
+   0) Neutralize Firebase-UI’s outer wrappers so they don’t show at all
+───────────────────────────────────────────────────────────────────── */
 .firebaseui-container,
-.firebaseui-card-content {
-  background-color: #000000 !important; /* Tailwind gray-900 */
-  color: #f9fafb !important;            /* Tailwind gray-100 */
-  border-radius: 0.75rem !important;
-  padding: 1.5rem;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.05);
-  border: none;
+.firebaseui-card {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
 }
 
-/* Main title text */
+/* ────────────────────────────────────────────────────────────────────
+   1) Style only the “inner” card content
+───────────────────────────────────────────────────────────────────── */
+.firebaseui-card-content {
+  background-color: rgba(31, 41, 55, 0.8) !important;   /* gray-800 @ 80% */
+  color: #f9fafb !important;                            /* gray-100 */
+  border-radius: 0.75rem !important;                    /* rounded-lg */
+  padding: 2rem !important;                             /* p-8 */
+  box-shadow: 0 10px 25px -10px rgba(0, 0, 0, 0.7) !important;
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   2) Title
+───────────────────────────────────────────────────────────────────── */
 .firebaseui-title {
-  font-size: 1.25rem;
-  font-weight: 600 !important;
-  color: #f3f4f6 !important; /* Tailwind gray-100 */
-  margin-bottom: 1rem;
+  font-size: 1.5rem !important;     /* text-xl */
+  font-weight: 600 !important;      /* font-semibold */
+  color: #f9fafb !important;
+  margin-bottom: 1.5rem !important; /* space-y-6 */
   text-align: center;
 }
 
-/* Input field label */
+/* ────────────────────────────────────────────────────────────────────
+   3) Field labels
+───────────────────────────────────────────────────────────────────── */
 .firebaseui-label {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #d1d5db !important; /* Tailwind gray-300 */
-  margin-bottom: 0.25rem;
+  display: block !important;
+  margin-bottom: 0.25rem !important; /* mb-1 */
+  font-size: 0.875rem !important;    /* text-sm */
+  font-weight: 500 !important;
+  color: #d1d5db !important;         /* gray-300 */
 }
 
-/* Email input box */
+/* ────────────────────────────────────────────────────────────────────
+   4) Input
+───────────────────────────────────────────────────────────────────── */
 .firebaseui-input {
-  background-color: #1f2937 !important; /* Tailwind gray-800 */
+  width: 100% !important;
+  background-color: #1f2937 !important; /* gray-800 */
   color: #f9fafb !important;
-  border: 1px solid #374151 !important; /* Tailwind gray-700 */
-  padding: 0.5rem 0.75rem !important;
-  border-radius: 0.375rem !important;
-  font-size: 0.875rem;
-  outline: none;
+  border: 1px solid #374151 !important; /* gray-700 */
+  padding: 0.75rem 1rem !important;      /* py-3 px-4 */
+  border-radius: 0.375rem !important;    /* rounded-md */
+  font-size: 0.875rem !important;        /* text-sm */
+  outline: none !important;
+  margin-bottom: 1rem !important;
 }
-
 .firebaseui-input:focus {
-  border-color: #2563eb !important; /* Tailwind blue-600 */
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3);
+  border-color: #4f46e5 !important;      /* indigo-600 */
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.4) !important;
 }
 
-/* Submit button */
+/* ────────────────────────────────────────────────────────────────────
+   5) Submit button
+───────────────────────────────────────────────────────────────────── */
 .firebaseui-id-submit {
-  background-color: #2563eb !important; /* Tailwind blue-600 */
-  color: white !important;
-  font-weight: 600;
-  border-radius: 0.375rem !important;
-  padding: 0.5rem 1.25rem !important;
-  margin-top: 1rem;
-  transition: background-color 0.2s ease;
+  width: 100% !important;
+  background-color: #4f46e5 !important; /* indigo-600 */
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  border-radius: 0.375rem !important;   /* rounded-md */
+  padding: 0.75rem 1.25rem !important;   /* py-3 px-5 */
+  margin-top: 1rem !important;
   text-transform: none !important;
-  font-size: 0.875rem;
+  font-size: 0.875rem !important;       /* text-sm */
+  transition: background-color 0.2s ease !important;
 }
-
 .firebaseui-id-submit:hover {
-  background-color: #1d4ed8 !important; /* Tailwind blue-700 */
+  background-color: #4338ca !important; /* indigo-700 */
 }
 
-/* Error message */
+/* ────────────────────────────────────────────────────────────────────
+   6) Error text
+───────────────────────────────────────────────────────────────────── */
 .firebaseui-error {
-  color: #f87171 !important; /* Tailwind red-400 */
-  font-size: 0.875rem;
-  margin-top: 0.5rem;
+  color: #fca5a5 !important; /* red-300 */
+  font-size: 0.875rem !important;
+  margin-top: 0.5rem !important;
 }
 
-/* Hide "Sign in with..." small text if needed */
+/* ────────────────────────────────────────────────────────────────────
+   7) Hide provider-label (“Sign in with …”)
+───────────────────────────────────────────────────────────────────── */
 .firebaseui-provider-label {
   display: none !important;
 }
 
-/* Remove borders/shadows from card wrapper */
-.firebaseui-card-footer,
-.firebaseui-card-header {
-  border: none !important;
-  box-shadow: none !important;
-}
-
-/* Align footer text */
+/* ────────────────────────────────────────────────────────────────────
+   8) Footer
+───────────────────────────────────────────────────────────────────── */
 .firebaseui-card-footer {
-  text-align: center;
-  margin-top: 1rem;
-  color: #9ca3af !important; /* Tailwind gray-400 */
-  font-size: 0.75rem;
+  text-align: center !important;
+  margin-top: 1rem !important;
+  color: #9ca3af !important;    /* gray-400 */
+  font-size: 0.75rem !important;/* text-xs */
 }

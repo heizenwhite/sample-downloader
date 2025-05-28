@@ -21,10 +21,10 @@ export default function FirebaseAuthUI() {
   }, []);
 
   return (
-    <div className="flex items-center justify-center min-h-[60vh] px-4">
+    <div className="bg-gray-900/60 backdrop-blur-md rounded-lg p-8 shadow-xl max-w-md mx-auto mt-16">
       <div
         id="firebaseui-auth-container"
-        className="w-full max-w-md bg-transparent"
+        className="w-full text-gray-100"
       />
     </div>
   );
