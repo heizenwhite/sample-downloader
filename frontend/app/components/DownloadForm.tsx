@@ -199,124 +199,159 @@ export default function DownloadForm() {
 
   return (
     <div className="bg-gray-900/60 backdrop-blur-md rounded-lg p-8 shadow-xl space-y-6">
-      {/* Product */}
-      <SelectInput
-        label="Product"
-        value={product}
-        setValue={(v) => setProduct(v as string)}
-        options={[
-          "Trades",
-          "Order Book Snapshots",
-          "Full Order Book",
-          "Top Of Book",
-          "OHLCV",
-          "VWAP",
-          "COHLCVVWAP",
-          "Derivatives",
-          "Index",
-          "Index Multi-Assets",
-        ]}
-        className="mb-4 bg-gray-800 p-4 rounded-lg"
-        selectClassName="bg-gray-900 text-white text-sm"
-      />
-
-      {/* Exchange */}
-      {!isIndexProduct && (
-        <InputField
-          label="Exchange Code(s)"
-          value={exchangeCode}
-          setValue={setExchangeCode}
-          className="bg-gray-800"
-          inputClassName="px-4 py-2 text-sm text-white"
+      {/* --- Product --- */}
+      <div className="space-y-1">
+        <label className="block text-sm font-medium text-gray-300">Product</label>
+        <SelectInput
+          value={product}
+          setValue={(v) => setProduct(v as string)}
+          options={[
+            "Trades",
+            "Order Book Snapshots",
+            "Full Order Book",
+            "Top Of Book",
+            "OHLCV",
+            "VWAP",
+            "COHLCVVWAP",
+            "Derivatives",
+            "Index",
+            "Index Multi-Assets",
+          ]}
+          className="bg-gray-800 rounded-lg"
+          selectClassName="w-full bg-gray-800 text-white text-sm px-4 py-2 rounded-lg"
         />
+      </div>
+
+      {/* --- Exchange Code(s) --- */}
+      {!isIndexProduct && (
+        <div className="space-y-1">
+          <label className="block text-sm font-medium text-gray-300">
+            Exchange Code(s)
+          </label>
+          <InputField
+            value={exchangeCode}
+            setValue={setExchangeCode}
+            className="bg-gray-800 rounded-lg"
+            inputClassName="w-full bg-gray-800 text-white text-sm px-4 py-2 rounded-lg"
+          />
+        </div>
       )}
 
-      {/* Instrument Class */}
+      {/* --- Instrument Class(es) --- */}
       {!isIndexProduct && (
-        <VirtualizedMultiSelect
-          label="Instrument Class(es)"
-          options={availableClasses}
-          selected={instrumentClass}
-          onChange={setInstrumentClass}
-          placeholder="Pick class(es)…"
-          height={200}
-          itemHeight={36}
-        />
+        <div className="space-y-1">
+          <label className="block text-sm font-medium text-gray-300">
+            Instrument Class(es)
+          </label>
+
+          {/* no built-in filter, just the styled list */}
+          <VirtualizedMultiSelect
+            options={availableClasses}
+            selected={instrumentClass}
+            onChange={setInstrumentClass}
+            placeholder="Pick class(es)…"
+            hideSearchInput
+            height={150}
+            itemHeight={32}
+            className="bg-gray-800 rounded-lg border border-gray-700 p-2"
+          />
+        </div>
       )}
 
-      {/* Instrument Codes */}
+
+      {/* --- Instrument Code(s) --- */}
       {!isIndexProduct && (
-        <div className="space-y-2">
+        <div className="space-y-1">
           <label className="block text-sm font-medium text-gray-300">
             Instrument Code(s)
           </label>
 
-          <input
-            type="text"
-            placeholder="Filter codes…"
-            value={codeFilter}
-            onChange={(e) => setCodeFilter(e.target.value)}
-            className="w-full bg-gray-800 text-white placeholder-gray-500 rounded-t-md border border-b-0 border-gray-700 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
+          {/* filter + toolbar in one “header” bar */}
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Filter codes…"
+              value={codeFilter}
+              onChange={(e) => setCodeFilter(e.target.value)}
+              className="
+                w-full
+                bg-gray-800
+                text-white
+                placeholder-gray-500
+                text-sm
+                px-4 py-2
+                rounded-t-lg
+                border border-b-0 border-gray-700
+                focus:outline-none focus:ring-2 focus:ring-indigo-500
+              "
+            />
 
-          <div className="flex justify-end space-x-4 text-sm">
-            <button
-              type="button"
-              onClick={() => setInstrumentCode(displayedCodes)}
-              className="text-indigo-400 hover:text-indigo-300"
-            >
-              Select All
-            </button>
-            <button
-              type="button"
-              onClick={() => setInstrumentCode([])}
-              className="text-red-400 hover:text-red-300"
-            >
-              Clear
-            </button>
+            <div className="absolute top-2 right-4 flex space-x-3 text-xs">
+              <button
+                type="button"
+                onClick={() => setInstrumentCode(displayedCodes)}
+                className="text-indigo-400 hover:text-indigo-300"
+              >
+                Select All
+              </button>
+              <button
+                type="button"
+                onClick={() => setInstrumentCode([])}
+                className="text-red-400 hover:text-red-300"
+              >
+                Clear
+              </button>
+            </div>
           </div>
 
+          {/* the pick list, styled to match */}
           <VirtualizedMultiSelect
             options={displayedCodes}
             selected={instrumentCode}
             onChange={setInstrumentCode}
             placeholder="Pick one or more codes…"
             hideSearchInput
-            height={240}
+            height={150}
             itemHeight={32}
+            className="
+              bg-gray-800
+              rounded-b-lg
+              border border-gray-700 border-t-0
+              p-2
+            "
           />
         </div>
       )}
 
-      {/* Index-only */}
+
+
+      {/* --- Index Code(s) --- */}
       {isIndexProduct && (
-        <InputField
-          label="Index Code(s)"
-          value={indexCode}
-          setValue={setIndexCode}
-          className="bg-gray-800"
-          inputClassName="px-4 py-2 text-sm text-white"
-        />
+        <div className="space-y-1">
+          <label className="block text-sm font-medium text-gray-300">Index Code(s)</label>
+          <InputField
+            value={indexCode}
+            setValue={setIndexCode}
+            className="bg-gray-800 rounded-lg"
+            inputClassName="w-full bg-gray-800 text-white text-sm px-4 py-2 rounded-lg"
+          />
+        </div>
       )}
 
+      {/* --- Bucket --- */}
       {isIndexProduct && (
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-gray-300">
-            Bucket
-          </label>
-          <div className="flex space-x-4">
+        <div className="space-y-1">
+          <label className="block text-sm font-medium text-gray-300">Bucket</label>
+          <div className="bg-gray-800 rounded-lg border border-gray-700 px-4 py-3 flex justify-between items-center">
             {["indices-backfill", "indices-data"].map((b) => (
-              <label
-                key={b}
-                className="flex items-center space-x-2 text-sm text-white"
-              >
+              <label key={b} className="flex items-center space-x-2 text-sm text-white">
                 <input
                   type="radio"
                   name="bucket"
                   value={b}
                   checked={bucketType === b}
                   onChange={() => setBucketType(b)}
-                  className="h-4 w-4 text-indigo-500"
+                  className="h-4 w-4 text-indigo-400 bg-gray-900 border-gray-600 focus:ring-indigo-500"
                 />
                 <span>{b.replace("-", " ")}</span>
               </label>
@@ -325,22 +360,26 @@ export default function DownloadForm() {
         </div>
       )}
 
-      {/* Granularity */}
+      {/* --- Granularity --- */}
       {requiresGranularity && (
-        <SelectInput
-          label="Granularity"
-          value={granularity}
-          setValue={(v) => setGranularity(v as string)}
-          options={["1m", "5m", "10m", "15m", "30m", "1h", "4h", "1d"]}
-          className="bg-gray-800 p-4 rounded-lg"
-          selectClassName="bg-gray-900 text-white text-sm"
-        />
+        <div className="space-y-1">
+          <label className="block text-sm font-medium text-gray-300">Granularity</label>
+          <SelectInput
+            value={granularity}
+            setValue={(v) => setGranularity(v as string)}
+            options={["1m","5m","10m","15m","30m","1h","4h","1d"]}
+            className="bg-gray-800 rounded-lg"
+            selectClassName="w-full bg-gray-800 text-white text-sm px-4 py-2 rounded-lg"
+          />
+        </div>
       )}
 
+
       {/* Dates */}
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-300">
+      <div className="flex mt-4">
+        {/* Start Date (left) */}
+        <div className="flex flex-col items-start w-1/2">
+          <label className="block text-sm font-medium text-gray-300 mb-1">
             Start Date
           </label>
           <DatePicker
@@ -351,8 +390,10 @@ export default function DownloadForm() {
             className="w-full bg-gray-800 text-white placeholder-gray-500 rounded-md border border-gray-700 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-300">
+
+        {/* End Date (right, pushed a bit) */}
+        <div className="flex flex-col items-start w-1/2 ml-8">
+          <label className="block text-sm font-medium text-gray-300 mb-1">
             End Date
           </label>
           <DatePicker

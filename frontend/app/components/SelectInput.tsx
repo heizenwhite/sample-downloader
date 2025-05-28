@@ -4,7 +4,6 @@
 import React from "react";
 
 type Props = {
-  label: string;
   value: string | string[];
   setValue: (val: string | string[]) => void;
   options: string[];
@@ -16,7 +15,6 @@ type Props = {
 };
 
 export default function SelectInput({
-  label,
   value,
   setValue,
   options,
@@ -35,9 +33,6 @@ export default function SelectInput({
 
   return (
     <div className={className}>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        {label}
-      </label>
       <select
         multiple={multi}
         value={value}

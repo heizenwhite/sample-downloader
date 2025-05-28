@@ -1,3 +1,4 @@
+// app/components/VirtualizedMultiSelect.tsx
 "use client";
 
 import React, { useState, useMemo } from "react";
@@ -15,7 +16,10 @@ type Props = {
   placeholder?: string;
   height?: number;
   itemHeight?: number;
+  /** if true, the built-in filter input is hidden */
   hideSearchInput?: boolean;
+  /** your parent can pass bg-gray-800, rounded-lg, borders, etc */
+  className?: string;
 };
 
 export default function VirtualizedMultiSelect({
@@ -23,18 +27,21 @@ export default function VirtualizedMultiSelect({
   options,
   selected = [],
   onChange,
-  placeholder = "Select options...",
+  placeholder = "Search…",
   height = 200,
   itemHeight = 36,
   hideSearchInput = false,
+  className = "",
 }: Props) {
   const [filter, setFilter] = useState("");
 
-  const filteredOptions = useMemo(() => {
-    return options.filter((opt) =>
-      opt.toLowerCase().includes(filter.toLowerCase())
-    );
-  }, [options, filter]);
+  const filteredOptions = useMemo(
+    () =>
+      options.filter((opt) =>
+        opt.toLowerCase().includes(filter.toLowerCase())
+      ),
+    [options, filter]
+  );
 
   const debouncedFilter = useMemo(
     () => debounce((val: string) => setFilter(val), 200),
@@ -49,21 +56,27 @@ export default function VirtualizedMultiSelect({
     }
   };
 
-  const Row = ({ index, style }: { index: number; style: React.CSSProperties }) => {
+  const Row = ({
+    index,
+    style,
+  }: {
+    index: number;
+    style: React.CSSProperties;
+  }) => {
     const value = filteredOptions[index];
-    const isChecked = Array.isArray(selected) && selected.includes(value);
+    const isChecked = selected.includes(value);
     return (
       <div
         style={style}
-        className="px-2 py-1 cursor-pointer hover:bg-blue-100 flex items-center"
+        className="px-3 py-2 cursor-pointer flex items-center hover:bg-gray-100"
         onClick={() => toggleOption(value)}
       >
         <input
           type="checkbox"
-          className="mr-2"
           checked={isChecked}
           onChange={() => {}}
           onClick={(e) => e.stopPropagation()}
+          className="mr-2 h-4 w-4 text-indigo-500"
         />
         <span className="truncate">{value}</span>
       </div>
@@ -71,18 +84,26 @@ export default function VirtualizedMultiSelect({
   };
 
   return (
-    <div className="space-y-1">
-      {label && <label className="block text-sm font-medium text-gray-700">{label}</label>}
+    <div className={className + " space-y-1"}>
+      {label && (
+        <label className="block text-sm font-medium text-gray-300">
+          {label}
+        </label>
+      )}
+
       {!hideSearchInput && (
         <input
           type="text"
           placeholder={placeholder}
           onChange={(e) => debouncedFilter(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+          className="w-full px-3 py-2 text-sm border border-gray-700 bg-gray-800 rounded-t-md placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
       )}
+
       <div
-        className="border border-gray-300 rounded-md overflow-hidden"
+        className={`border border-gray-700 overflow-hidden ${
+          hideSearchInput ? "rounded-md" : "rounded-b-md border-t-0"
+        }`}
         style={{ height }}
       >
         <AutoSizer disableHeight>
@@ -98,12 +119,12 @@ export default function VirtualizedMultiSelect({
           )}
         </AutoSizer>
       </div>
-      {Array.isArray(selected) && selected.length > 0 && (
-        <div className="text-xs text-gray-600 mt-1">
-            Selected: {selected.join(", ")}
+
+      {selected.length > 0 && (
+        <div className="text-xs text-gray-500 mt-1">
+          Selected: {selected.join(", ")}
         </div>
       )}
-
     </div>
   );
 }

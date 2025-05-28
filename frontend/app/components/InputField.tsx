@@ -2,7 +2,6 @@
 import React from "react";
 
 type Props = {
-  label: string;
   value: string;
   setValue: (val: string) => void;
   className?: string;       // wrapper class
@@ -10,7 +9,6 @@ type Props = {
 };
 
 export default function InputField({
-  label,
   value,
   setValue,
   className = "",
@@ -18,7 +16,6 @@ export default function InputField({
 }: Props) {
   return (
     <div className={className}>
-      <label className="block mb-1 font-medium text-gray-300">{label}</label>
       <input
         type="text"
         value={value}
