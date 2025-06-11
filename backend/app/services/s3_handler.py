@@ -24,13 +24,7 @@ def download_and_decompress(s3_client, bucket_name, key, download_folder, reques
         print(f"⬇️ Downloading {key}...")
         s3_client.download_file(bucket_name, key, local_path)
 
-        # decompress
-        if local_path.endswith(".gz"):
-            decompressed = local_path[:-3]
-            with gzip.open(local_path, "rb") as f_in, open(decompressed, "wb") as f_out:
-                shutil.copyfileobj(f_in, f_out)
-            os.remove(local_path)
-            return decompressed
+        # DO NOT decompress — keep .gz as-is
         return local_path
 
     except Exception as e:

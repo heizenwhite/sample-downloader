@@ -61,24 +61,24 @@ async def download_data(
         granularity=req.granularity,
         start_date=sd, end_date=ed
     )
-
+    
     # fetch + zip
     try:
         zip_path, downloaded, skipped = await fetch_files(
             prefixes=prefixes,
             storage=req.storage,
-            download_folder="./downloads",
+            download_folder="/data/downloads",
             request_id=req.request_id,
             bucket_type=req.bucket
         )
     except DownloadCancelled:
         raise HTTPException(499, "Cancelled mid-way")
-
+    
     # schedule cleanup
     background_tasks.add_task(os.remove, zip_path)
     for p in downloaded:
         background_tasks.add_task(os.remove, p)
-    background_tasks.add_task(lambda: os.rmdir("./downloads"))
+    background_tasks.add_task(lambda: os.rmdir("/data/downloads"))
 
     # put lists into headers
     headers = {

@@ -1,6 +1,6 @@
 # backend/app/main.py
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.routes import download, validate
@@ -24,7 +24,7 @@ app.add_middleware(
 
 # ✅ Preflight OPTIONS handler
 @app.options("/{rest_of_path:path}")
-async def preflight_handler():
+async def preflight_handler(request: Request):
     return JSONResponse(content={"status": "OK"})
 
 # ✅ Include all routers
