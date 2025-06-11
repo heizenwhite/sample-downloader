@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Request
 from fastapi.responses import StreamingResponse, JSONResponse
 from datetime import datetime, timedelta
 from pydantic import BaseModel
@@ -33,8 +33,14 @@ def read_in_chunks(path: str, chunk_size: int = 1024*1024):
 async def download_data(
     background_tasks: BackgroundTasks,
     req: DownloadRequest,
-    user=Depends(verify_token),
+    request: Request,
 ):
+    # Do not run for preflight
+    if request.method == "OPTIONS":
+        return JSONResponse(content={"status": "OK"})
+
+    # ✅ Auth only on real requests
+    user = await verify_token(request)
     # pre-start cancel
     if req.request_id and cancellation_registry.get(req.request_id):
         raise HTTPException(499, "Cancelled")
